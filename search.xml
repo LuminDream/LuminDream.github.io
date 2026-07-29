@@ -1,20 +1,816 @@
 <?xml version="1.0" encoding="utf-8"?>
-<search> 
-  
-  
-    
-    <entry>
-      <title>Hello World</title>
-      <link href="/2026/07/29/hello-world/"/>
-      <url>/2026/07/29/hello-world/</url>
-      
-        <content type="html"><![CDATA[<p>Welcome to <a href="https://hexo.io/">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues">GitHub</a>.</p><h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new <span class="string">&quot;My New Post&quot;</span></span><br></pre></td></tr></table></figure><p>More info: <a href="https://hexo.io/docs/writing.html">Writing</a></p><h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure><p>More info: <a href="https://hexo.io/docs/server.html">Server</a></p><h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure><p>More info: <a href="https://hexo.io/docs/generating.html">Generating</a></p><h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure><p>More info: <a href="https://hexo.io/docs/one-command-deployment.html">Deployment</a></p>]]></content>
-      
-      
-      
-    </entry>
-    
-    
-  
-  
+<search>
+  <entry>
+    <title>Linux基础总结</title>
+    <url>/2023/01/05/Linux%E5%9F%BA%E7%A1%80%E6%80%BB%E7%BB%93/</url>
+    <content><![CDATA[1. linux概述1.1. 派系分别
+
+
+派系
+代表发行版
+包管理
+运维场景
+
+
+
+RedHat系
+RHEL、CentOS、Rocky Linux、AlmaLinux、Fedora
+rpm + yum/dnf
+国内企业服务器占70%以上，金融、运营商、政企首选
+
+
+Debian系
+Debian、Ubuntu Server
+deb + apt
+互联网公司多（阿里、腾讯内部大量用），云原生&#x2F;K8s生态友好
+
+
+SUSE系
+SLES、openSUSE
+rpm + zypper
+欧洲企业多，国内用得少，了解即可
+
+
+
+
+
+对比项
+RedHat系（CentOS&#x2F;Rocky）
+Debian系（Ubuntu）
+
+
+
+
+装软件
+yum install nginx
+apt install nginx
+
+
+
+服务管理
+systemctl（都一样）
+systemctl（都一样）
+
+
+
+配置文件位置
+/etc/nginx/nginx.conf
+基本一样
+
+
+
+网络配置
+/etc/sysconfig/network-scripts/
+/etc/netplan/
+
+
+
+防火墙
+firewalld
+ufw
+
+
+
+SELinux
+默认开启（坑多）
+默认用AppArmor
+
+
+
+企业定位
+传统企业、金融、政企
+互联网、云原生
+
+
+
+
+
+
+国产系统
+主导方
+基于什么
+核心场景
+一句话特点
+
+
+
+openEuler（欧拉）
+华为
+自研（Linux内核）
+服务器、云计算、边缘
+国产服务器OS的”根社区”，电信&#x2F;金融大量部署
+
+
+银河麒麟（KylinOS）
+中国电子（CEC）
+Linux
+党政、军工、航天
+桌面信创占有率~70%，等保四级认证，安全等级最高
+
+
+统信UOS
+统信软件
+Debian系（Deepin）
+桌面办公、政企
+最像Windows的国产系统，5万+应用适配
+
+
+龙蜥（Anolis OS）
+阿里云
+兼容RHEL&#x2F;CentOS
+云服务器、互联网
+CentOS停服后的平滑替代，阿里云内部大规模验证
+
+
+Deepin（深度）
+统信旗下
+Debian
+个人桌面、社区
+国产桌面里最漂亮的，社区版免费
+
+
+1.2. linux内核版本
+
+
+版本
+GA初始内核
+末版内核（停更时）
+对应RHEL
+包管理
+初始化系统
+EOL状态
+
+
+
+CentOS 6
+2.6.32-71
+2.6.32-754
+RHEL 6
+yum
+Upstart + SysV
+❌ 2020-11-30 已死
+
+
+CentOS 7
+3.10.0-123
+3.10.0-1160
+RHEL 7
+yum
+systemd
+❌ 2024-06-30 已死
+
+
+CentOS 8
+4.18.0-80
+4.18.0-372（传统版）
+RHEL 8
+dnf（兼容yum）
+systemd
+❌ 2021-12-31 提前猝死
+
+
+CentOS 9
+⚠️ 无传统版
+5.14.x（Stream滚动）
+RHEL 9
+dnf（yum被弃）
+systemd
+🔄 仅 Stream 滚动
+
+
+下面这个和centos一比一复刻，完全就是改了个名字：
+
+
+
+版本
+对应RHEL
+Linux内核
+GA时间
+支持到
+一句话定位
+
+
+
+Rocky 8
+RHEL 8
+4.18
+2021-06
+2029-05
+上一代，存量机器多，新环境不推荐
+
+
+Rocky 9
+RHEL 9
+5.14
+2022-07
+2032-05
+⭐ 当前官方推荐、生产最主流
+
+
+Rocky 10
+RHEL 10
+6.12
+2025-06
+一般2030&#x2F;安全2035
+最新一代，刚出不久，尝鲜&#x2F;新项目
+
+
+
+
+
+
+
+
+
+
+查询命令：
+# 1. 看当前运行内核（最常用，解读 el7/el8 后缀）uname -r# 输出：3.10.0-1160.el7.x86_64# 2. 看发行版版本（区分你是6/7/8/9，比记内核号快）cat /etc/redhat-release# 输出：CentOS Linux release 7.9.2009 (Core)# 3. 看系统装了几个内核（升级内核后清理旧内核要用，面试爱问&quot;怎么删旧内核&quot;）rpm -qa | grep kernel# 或grub2-editenv list   # 看当前默认启动哪个内核
+
+
+2. 系统管理2.1. service服务管理.service 文件 &#x3D; 一份“岗位说明书”（写明怎么启动、怎么停止、什么情况下重启）。systemctl &#x3D; 老板的命令（对这个服务说 start、stop、enable、status）。systemd &#x3D; 整个公司的管理机器，它负责读懂说明书，监控所有服务。现在主流的Linux都用的是这个。
+2.1.1. .service 优先级说明优先级 高 ───────────────────────────────► 低/etc/systemd/system/      管理员自定义（你手写的，说了算）/run/systemd/system/      运行时动态生成（transient unit，临时）/usr/lib/systemd/system/  软件包出厂自带（rpm 装的，垫底）
+
+2.1.2. .service 文件编写.service 文件一般放在 &#x2F;etc&#x2F;systemd&#x2F;system&#x2F;（优先级最高）或 &#x2F;usr&#x2F;lib&#x2F;systemd&#x2F;system&#x2F;（系统默认）。每个 .service 文件都由 [Unit]、[Service]、[Install] 三部分构成，缺一不可。
+[Unit] —— 介绍自己，声明依赖Description	服务描述（systemctl status 会显示）	必须写清楚，方便同事After	在哪些服务之后启动	数据库要在网络之后，应用要在数据库之后Before	在哪些服务之前启动	比如关机前先停业务Wants	弱依赖，被依赖服务启动失败不影响本服务	配合 After 使用，如 Wants=redis.serviceRequires	强依赖，被依赖服务启动失败则本服务也失败	谨慎使用，避免连锁故障Conflicts	互斥服务，不能同时运行	比如新旧版本服务互斥[Unit]Description=支付网关服务Documentation=https://wiki.yourcompany.com/paymentAfter=network.target mysql.serviceWants=redis.serviceRequires=network.target生产案例：Java 应用必须在 MySQL 启动完成后才启动，否则连接池初始化报错。所以写：After=network.target mysql.serviceWants=mysql.service---------------------------------------------------------------------[Service] —— 定义怎么干活（重中之重）1.核心参数：Type + ExecStart[Service]Type=simple           # 默认，ExecStart启动的程序就是主进程ExecStart=/usr/bin/java -jar /app/payment/app.jarType	    适用场景                          	特点- simple	前台运行的程序（Node.js、Python web）	默认，主进程不退出，systemd 直接跟踪- forking	会分叉到后台的传统服务（Nginx、MySQL）	父进程退出，systemd 需要 PIDFile 或猜测子进程- oneshot	执行一次就退出的脚本（如清理脚本）	    配合 RemainAfterExit=yes 可显示 active- notify	支持 sd_notify 的现代程序	        服务就绪后主动通知 systemd，启动更快- idle	    延迟到其他任务完成后再启动	        极少用，降低启动竞争生产案例：手装 MySQL 5.7 用 mysqld_safe 启动，脚本本身会分叉出真正 mysqld 进程，所以必须用 Type=forking，并指定 PIDFile 指向数据库的数据目录下的 pid 文件。2. 启停命令ExecStart=/usr/local/nginx/sbin/nginxExecReload=/usr/local/nginx/sbin/nginx -s reloadExecStop=/usr/local/nginx/sbin/nginx -s quit注意：全部使用绝对路径。可以在命令前加 - 表示忽略失败，如 ExecStart=-/usr/bin/cleanup.sh。ExecStartPre / ExecStartPost：启动前后执行的命令，比如创建目录、检查配置。3. 进程管理Restart=always          # 只要退出就重启RestartSec=5           # 重启间隔，默认100msTimeoutSec=60          # 启动/停止超时时间KillMode=control-group # 停止时杀掉整个cgroup的所有进程（默认）KillSignal=SIGTERM     # 优雅停止信号常见的restart：- no：不自动重启（默认）- on-failure：异常退出才重启（推荐给 MySQL）- always：不管怎么退出都重启（适合 Web 应用）设了 Restart=always 的程序，如果一启动就崩，会不停重启刷爆日志。所以要结合 RestartSec 和 StartLimitIntervalSec、StartLimitBurst 限制重启次数。4.权限和运行用户（安全铁律）User=appuserGroup=appgroup# 限制资源LimitNOFILE=65535LimitNPROC=4096# 加固PrivateTmp=true           # 独立临时目录，防/tmp提权ProtectSystem=full        # 系统目录只读ReadOnlyPaths=/etc/myapp  # 指定只读路径ReadWritePaths=/data/logs /data/uploads  # 可写路径CapabilityBoundingSet=CAP_NET_BIND_SERVICE  # 只给特定能力# “任何对外服务我都不会用 root 跑，必须建独立用户并设置 CapabilityBoundingSet 只授权 CAP_NET_BIND_SERVICE 让它能监听 80 端口，而不用给完整 root 权限。同时开启 PrivateTmp 防止提权。”5.环境变量Environment=&quot;JAVA_HOME=/opt/jdk11&quot; &quot;APP_ENV=production&quot;EnvironmentFile=/etc/sysconfig/myapp   # 从文件加载生产习惯： 敏感信息（数据库密码）绝不放在 Environment 里明文写，而是用 EnvironmentFile 指向权限 600 的文件，或配合 Vault 注入。---------------------------------------------------------------------[Install] —— 决定怎么挂靠到开机流程[Install]WantedBy=multi-user.targetWantedBy：通常是 multi-user.target（命令行多用户模式），也可以是 graphical.target（图形界面模式）。执行 systemctl enable 时，systemd 会在 /etc/systemd/system/&lt;WantedBy&gt;.wants/ 目录下创建一个指向本 service 文件的符号链接，从而在进入该运行级别时自动启动。
+
+
+举例说明：
+1. 手工安装的 MySQL 5.7（Type=forking）[Unit]Description=MySQL 5.7 Database ServerAfter=network.target[Service]Type=forkingUser=mysqlGroup=mysqlPIDFile=/data/mysql/data/mysqld.pidExecStartPre=/usr/local/mysql/bin/mysqld --defaults-file=/etc/my.cnf --user=mysql --initialize-insecureExecStart=/usr/local/mysql/bin/mysqld_safe --defaults-file=/etc/my.cnf --pid-file=/data/mysql/data/mysqld.pidExecStop=/usr/local/mysql/bin/mysqladmin -u root -p&#x27;secret&#x27; shutdownExecReload=/bin/kill -HUP $MAINPIDTimeoutSec=300Restart=on-failureRestartSec=10LimitNOFILE=65535PrivateTmp=true[Install]WantedBy=multi-user.target------------------------------------------------------------2.Java 微服务（Type=simple）[Unit]Description=Order ServiceAfter=network.target mysql.service redis.serviceWants=mysql.service redis.service[Service]Type=simpleUser=appuserGroup=appgroupWorkingDirectory=/app/orderExecStart=/opt/jdk11/bin/java -jar /app/order/order-service.jar --spring.profiles.active=prodRestart=alwaysRestartSec=15StandardOutput=journalStandardError=journalSyslogIdentifier=order-serviceLimitNOFILE=65536EnvironmentFile=/etc/sysconfig/order-service[Install]WantedBy=multi-user.target------------------------------------------------------------3.一次性任务（如开机清理临时文件，Type=oneshot）[Unit]Description=Clean temp files on boot[Service]Type=oneshotExecStart=/usr/bin/find /tmp -type f -atime +7 -deleteRemainAfterExit=yes[Install]WantedBy=multi-user.target
+
+写好了按下面步骤放到相应位置并启动：
+# 1. 写好 .service 文件，放到 /etc/systemd/system/ 下面sudo vim /etc/systemd/system/my-mysql.service# 2. 让 systemd 识别新文件sudo systemctl daemon-reload# 3. 启动服务并设置开机自启sudo systemctl start my-mysqlsudo systemctl enable my-mysql# 4. 检查状态sudo systemctl status my-mysql# 原理：systemctl enable 会创建一个符号链接，把 WantedBy 指定的目标（如 multi-user.target）和你的服务关联起来。开机时系统走到 multi-user.target 时，就会自动启动你那个服务。面试时你说出“enable 创建了符号链接到 /etc/systemd/system/multi-user.target.wants/ 下”，证明你真干过活。
+
+2.1.3. 常用命令总结服务 = .service 配置文件 + 后台进程start = 按配置文件跑进程enable = 把配置文件放进开机列表，开机自动 start-------------------------------------------------------------------systemctl start/stop/restart/status 服务名systemctl reload 服务名:重载配置（不中断服务）systemctl daemon-reload                    # 让 systemd 识别新文件systemctl enable/disable 服务名             # 开机自启systemctl enable --now 服务名               # 立即启动systemctl cat 服务名                        # 查看服务的启动配置文件内容（.service 文件）systemctl try-restart 服务名:仅当服务运行时才重启systemctl show 服务名                       # 查看服务的完整运行参数（详细配置信息）systemctl is-enabled 服务名 	                # 检查服务是否设置了开机自启（输出 enabled / disabledsystemctl list-units --type=service --state=failed # 列出所有启动失败的服务（排查服务器故障最常用）systemctl get-default                       # 列出所有启动失败的服务（排查服务器故障最常用）systemctl set-default multi-user.target     # 设置系统为命令行模式（服务器必用，最省资源）# 测试 .service 语法：systemd-analyze verify /etc/systemd/system/服务名.service# 安全加固检查：systemd-analyze security 服务名 会给安全评分，提醒你缺少哪些保护。
+
+2.2. 日志管理2.2.1. journalctl systemd 自带了一个集中式日志守护进程 systemd-journald，把内核消息、系统服务、你自定义的服务输出，全部收集到一个二进制数据库（存在 &#x2F;run&#x2F;log&#x2F;journal&#x2F; 或 &#x2F;var&#x2F;log&#x2F;journal&#x2F; 里）。而 journalctl 就是用来查询这个数据库的工具，支持按时间、服务、进程 ID、优先级过滤，甚至实时跟踪。面试时一句说清：“journalctl 是 systemd 生态的日志查询命令，对应后台的 systemd-journald 服务。它集中管理所有 systemd 单元和内核的日志，支持结构化过滤和持久化存储。”
+journalctl持久化：CentOS 7 最小化安装，journald 的日志默认存在内存里（&#x2F;run&#x2F;log&#x2F;journal），一重启全清空！所以你重启服务器后 journalctl -b -1 查不到上次的日志，不是命令错了，是根本没持久化。
+# 1. 建持久化目录（建了它就开始往这写，重启不丢）sudo mkdir -p /var/log/journalsudo systemd-tmpfiles --create --prefix /var/log/journalsudo systemctl restart systemd-journald# 2. 限制日志大小，防止它把盘写满（编辑配置）sudo vim /etc/systemd/journald.conf#  改这几行（去掉前面的#）：#  SystemMaxUse=2G        ← 日志最多占2G，超了自动删最老的#  SystemKeepFree=500M    ← 至少给系统留500M空闲#  MaxRetentionSec=1month ← 最多保留1个月sudo systemctl restart systemd-journald
+
+
+生产级防护：日志轮转 logrotate（防爆盘的根本）
+### 生产级防护：日志轮转 logrotate（防爆盘的根本）# 配置文件在这/etc/logrotate.conf              # 全局配置/etc/logrotate.d/                # ⭐ 每个服务一个配置文件，nginx/rsyslog 都在这# 看 nginx 的轮转规则长啥样cat /etc/logrotate.d/nginx/var/log/nginx/*.log &#123;    daily              # 每天切一次    rotate 7           # 保留7份旧的（也就是留7天）    compress           # 旧的压缩成 .gz，省空间    delaycompress      # 昨天那份先不压，方便查    missingok          # 日志文件不存在也不报错    notifempty         # 空文件不轮转    sharedscripts    postrotate        [ -f /var/run/nginx.pid ] &amp;&amp; kill -USR1 `cat /var/run/nginx.pid`  # 通知nginx重开日志文件    endscript&#125;手动测试：sudo logrotate -d /etc/logrotate.d/nginx    # -d 调试模式，只演练不真执行，看有没有语法错sudo logrotate -f /etc/logrotate.d/nginx    # -f 强制立刻轮转一次，验证生效
+
+
+常用操作：
+1.查看所有日志（从头开始）：journalctl          # 敲完按 Shift+G 跳到末尾2.查看某个服务的日志（生产最常用）：journalctl -u nginx.service    # 查看 nginx 日志journalctl -u nginx -f         # 实时跟踪（类似 tail -f）3.按时间过滤journalctl --since &quot;2026-06-12 10:00:00&quot; --until &quot;2026-06-12 11:00:00&quot;journalctl --since today        # 今天的日志journalctl --since &quot;1 hour ago&quot; # 最近1小时journalctl -u 服务名 --since &quot;1 hour ago&quot; # 查看某个服务最近1小时内的日志4.查看本次启动以来的日志journalctl -b        # 当前启动journalctl -b -1     # 上一次启动的日志（重启后查故障原因必备）journalctl --list-boots  # 列出所有启动记录5.按优先级过滤journalctl -p err     # 只看错误及以上级别的日志journalctl -p warning # 警告及以上# 级别：emerg, alert, crit, err, warning, notice, info, debug6.查看内核消息：journalctl -k7.查看某个进程的日志:journalctl _PID=1234# 或者按可执行路径查journalctl /usr/bin/nginx8.查看用户操作记录（安全审计）journalctl -u sshd -f          # 查看 SSH 登录日志journalctl --user              # 查看当前用户的用户级服务日志9.清理旧日志（节省空间）journalctl --vacuum-time=7d    # 保留最近7天journalctl --vacuum-size=500M  # 保留最多500M# 最新的日志放在文件的最下面# 1./var/log/messages  # 系统日志文件# 2./var/log/secure   # 系统登录和退出日志# 如果secure日志中出现大量的Failed说明有人暴力破解服务器密码。服务: Nginx服务 自身日志/var/log/nginx/nginx.log注意: 有些服务默认会将部分日志输出到message系统日志中
+
+
+2.3. 主机环境管理2.3.1. 主机名称配置# 企业中实际规范：# 方案 1：业务 - 环境 - 序号（中小企业最常用，推荐新手）# 格式：业务-环境-编号# env 标识：prod生产 / test测试 / dev开发 / gray灰度# 示例：# 商品服务生产第 3 台：goods-prod-03# MySQL 测试库第 1 台：mysql-test-01# Nginx 灰度节点：nginx-gray-02# 方案 2：机房 - 业务 - 角色 - 序号（中大型集群、多机房）# 格式：机房-业务-角色-编号# 机房简写：bj北京、sh上海、cq重庆、ali阿里云、hw华为云# 角色：web前端、db数据库、cacheRedis、k8s-node集群节点# 示例：# 阿里云商品 Web 第 5 台：ali-goods-web-05# 北京机房 MySQL 主库：bj-order-db-master主机名称配置：- hostname # 查看主机名- hostname test-server # 临时修改主机名- hostnamectl set-hostname test-server # 永久修改主机名 文件在/etc/hostname 
+
+2.3.2. 系统变量文件：/etc/profile echo $PATH/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/binPATH = 一个变量名字（系统用来找命令的路径列表）标准写法这种：# 在文件最后加export JAVA_HOME=/usr/local/jdk1.8.0_181export PATH=$PATH:$JAVA_HOME/bin:/usr/local/python3/bin:/usr/local/sonar-scanner/bin配置生效：source /etc/profile
+
+2.3.3. 开机初始化相关文件1./etc/rc.local作用：开机自启动执行命令配置文件# 注意：现在全部用.service文件替代# CentOS6 及更早用 SysVinit 启动体系，开机最后一步固定执行 /etc/rc.local，所有人写开机自启都往这里塞脚本；CentOS7/RHEL7 全面换成 systemd，官方不再推荐用 rc.local，只是为了兼容老脚本没删掉这个文件2.开机显示配置文件：/etc/motd    # 登录后显示################################################# 【生产环境-支付业务】 内网IP：10.0.5.22# 禁止随意执行rm -rf、kill进程、修改数据库# 所有操作会记录审计日志，高危操作需工单审批# 运维支持群：XXX  工单地址：shturl.cc/Zl5hv529################################################⁤⁣⁤3.远程连接的初始化显示配置文件# 登录前显示 /etc/issue # 本地物理机房/etc/issue.net # 远程ssh用  但是一般不用这个 用ssh的东西 内网跳板机设置：# 1. 编辑 /etc/issue.netecho &quot;WARNING: Unauthorized access prohibited. All activities are logged.&quot; &gt; /etc/issue.net# 2. 修改SSH配置echo &quot;Banner /etc/issue.net&quot; &gt;&gt; /etc/ssh/sshd_config# 3. 重启SSH服务（小心别断自己连）systemctl restart sshd# 物理机房接显示器、本地键盘登录服务器时，输入用户名密码之前弹出的横幅文字；##########################################################                内部业务服务器 禁止非法访问              ## 未经公司运维部门书面许可，严禁登录、操作、复制数据      ## 违规操作将追溯日志并追究法律责任                        ## 主机名：\n  内核版本：\r  终端：\l                     ##########################################################
+
+2.3.4. 时间管理时间同步：ntpdate ntp1.aliyun.com查看系统时间: date #软件时间  内核内存查看固件时间: clock # 硬件时间 主板上那个timedatectl #全部看系统时间同步给硬件时间: hwclock -wtimedatectl list-timezones | grep Shanghai   # 查找timedatectl set-timezone Asia/Shanghai        # 设为东八区核心： 时间戳date +%Y%m%d              # 20260615date +%Y%m%d_%H%M%S       # 20260615_143052 (最常用，秒级精度)date +%Y-%m-%d_%H-%M-%S   # 2026-06-15_14-30-52date +%s                  # Unix 时间戳 1718453452 (排序方便，但人看不懂)TS=$(date +%Y%m%d_%H%M%S)cp /etc/nginx/nginx.conf /backup/nginx.conf_$&#123;TS&#125;# 结果：/backup/nginx.conf_20260615_020001扩展补充：    修改系统时间到7天以前:date -s 20081010    时间同步回当前时间:ntpdate ntp1.aliyun.com
+
+2.3.5. 系统运行级别&amp;开关机现在这个不用了，&#x2F;etc&#x2F;inittab 早就不存在或不被读取了，”运行级别”这个概念已被 target（目标单元） 取代。一般用在GPU服务器上， 比如说固定开机启动图像界面之类的，直接背理论就行
+/etc/inittab 文件(了解)笔试题: Linux系统的运行级别 runlevel0  # 表示关机1  # 表示单用户，忘记密码可以从此界面中找回2  # 表示多用户，但是不支持NFS，网络文件系统(缺少很多功能)3  # 表示完全多用户 我们默认所在的界面就是3运行级别4  # 保留待开发5  # 表示桌面运行级别 提前需要安装DESKTOP包 6  # 表示重启查看系统的运行级别:[root@db01 ~]# runlevelN 3进入到对应的级别:init 5  # 自动重启进入到图形界面-------------------------------------------------------------系统开关机：    shutdown  关机，默认1分钟后关机        -h 参数选项              eg:shutdown -h 5   # 表示5分钟后关闭操作系统                 shutdown -h now # 表示立刻关机        -c 取消关机              eg:shutdown -c     # 取消关机或者重启    poweroff      直接回车 直接关机    init 0        直接回车 直接关机    shutdown -r 重启              eg:shutdown -r 5  # 5分钟后重启              eg:shutdown -r now # 立刻重启    reboot    直接重启    init 6    直接重启
+
+
+2.4. 软件管理2.4.1. 软件管理的概述不管哪个系，软件管理都是两层：# 生产中99%的情况用高层工具，底层工具只在特殊场景用（比如装一个本地 .rpm/.deb 文件）。┌─────────────────────────────────────────────────┐│  高层工具（自动解决依赖）                          ││  Red Hat: yum / dnf                             ││  Debian:  apt / apt-get                         │├─────────────────────────────────────────────────┤│  底层工具（只管单个包，不管依赖）                   ││  Red Hat: rpm                                   ││  Debian:  dpkg                                  │└─────────────────────────────────────────────────┘软件源：软件源（Repository）= 一个远程仓库的地址Red Hat 系：配置文件在 /etc/yum.repos.d/ 目录下，每个 .repo 文件就是一个源Debian 系：配置文件在 /etc/apt/sources.list 和 /etc/apt/sources.list.d/ 目录下
+
+安装方式的区别：
+2.4.2. Red Hat 系（CentOS 7 用 yum，CentOS 8+ 用 dnf）1.软件源管理：# 查看当前配置了哪些源ls /etc/yum.repos.d/# 典型输出：CentOS-Base.repo  CentOS-Extras.repo  CentOS-Updates.repo# 查看一个源文件长什么样cat /etc/yum.repos.d/CentOS-Base.repo[base]                          # 源的ID（唯一标识）name=CentOS-$releasever - Base  # 描述信息mirrorlist=http://mirrorlist.centos.org/?release=$releasever&amp;arch=$basearch&amp;repo=os# 或者用 baseurl（直接指定地址）# baseurl=http://mirrors.aliyun.com/centos/$releasever/os/$basearch/gpgcheck=1                      # 是否校验GPG签名（生产必须开）gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7  # GPG公钥位置enabled=1                       # 是否启用生产中换源：# 备份原有源mkdir /etc/yum.repos.d/bakmv /etc/yum.repos.d/CentOS-*.repo /etc/yum.repos.d/bak/# 下载阿里云源（CentOS 7为例）curl -o /etc/yum.repos.d/CentOS-Base.repo https://mirrors.aliyun.com/repo/Centos-7.repo# 刷新缓存yum clean allyum makecache--------------------------------------------------------2.安装软件：# 最常用：安装（自动解决依赖）yum install -y nginx # -y：自动确认，不弹交互提示（脚本里必须加）yum install -y nginx-1.20.1 # 安装指定版本yumdownloader --resolve nginx # 只下载不安装（排查依赖问题时用）yum info nginx # 查看某个包的信息（装没装、版本、依赖）yum search nginx # 搜索软件包yum deplist nginx # 查看某个包会装哪些依赖3.更新升级：yum update -y nginx # 更新单个包yum update -y # 更新所有包（生产中慎用！可能升级内核导致重启后起不来）yum update --security -y # 只更新安全补丁（生产推荐）yum check-update # 查看可更新的包4.卸载：# 卸载（保留配置文件）yum remove nginx# 或yum erase nginx    # erase 和 remove 完全等价# 注意：yum remove 会提示哪些依赖包也会被一起删# 生产操作前一定看清提示！别把依赖的东西全删了5.查询：rpm -qa # 查看已安装的所有包 rpm -q nginx # 查看某个包是否安装 rpm -ql nginx # 查看某个包安装了哪些文件# 输出类似：# /etc/nginx/nginx.conf# /usr/sbin/nginx# /usr/share/nginx/html/index.htmlrpm -qf /usr/sbin/nginx # 反向查询：某个文件属于哪个包（排查&quot;这文件哪来的&quot;）# 输出：nginx-1.20.1-1.el7.x86_64rpm -qi nginx # 查看包的详细信息（版本、大小、依赖、描述）rpm -qR nginx # 查看包的依赖关系6.补充：查看仓库：yum repolist           清理YUM缓存：yum clean all          覆盖安装：yum reinstall          本地安装 扩展：yum -y loaclinstall    查询包名：	yum provides rz	yum search rz--------------------------------------------------------------------本地 .rpm 文件安装（底层工具）：# 安装本地rpm包rpm -ivh nginx-1.20.1-1.el7.x86_64.rpm# -i：install 安装# -v：verbose 显示详细过程# -h：hash 显示进度条（#####）# 升级安装（没装过就装，装过就升级）rpm -Uvh nginx-1.20.1-1.el7.x86_64.rpm# -U：upgrade# 刷新缓存（让yum识别新源）yum makecache# 卸载rpm -e nginx# 如果有依赖报错，加 --nodeps 强删（生产中极少用，除非你清楚后果）rpm -e --nodeps nginx
+
+2.4.3. Debian 系（Ubuntu &#x2F; Debian）1.软件源管理：# 主源配置文件cat /etc/apt/sources.list# 类型  地址  发行版代号  组件deb http://mirrors.aliyun.com/ubuntu/ jammy main restricted universe multiversedeb-src http://mirrors.aliyun.com/ubuntu/ jammy main restricted universe multiverse# deb：二进制包源# deb-src：源码包源（一般用不到）# jammy：Ubuntu 22.04 的代号（focal=20.04, bionic=18.04）# main/restricted/universe/multiverse：组件分类（开源程度不同）# 第三方源目录ls /etc/apt/sources.list.d/换源操作：# 备份cp /etc/apt/sources.list /etc/apt/sources.list.bak# 替换（Ubuntu 22.04为例）sed -i &#x27;s|http://archive.ubuntu.com|http://mirrors.aliyun.com|g&#x27; /etc/apt/sources.listsed -i &#x27;s|http://security.ubuntu.com|http://mirrors.aliyun.com|g&#x27; /etc/apt/sources.list# 刷新索引（相当于 yum makecache）apt update--------------------------------------------------2.安装软件：# 安装（自动解决依赖）apt install -y nginx # -y：自动确认apt install -y nginx=1.18.0-0ubuntu1 # 安装指定版本apt search nginx # 搜索 apt show nginx # 查看包信息apt depends nginx # 查看依赖3.升级：# 更新所有包apt update &amp;&amp; apt upgrade -y# apt update：刷新索引（不装任何东西）# apt upgrade：根据新索引升级已安装的包# 完整升级（会处理依赖变更，可能删除旧包）apt full-upgrade -y# 只更新安全补丁apt upgrade -y -o APT::Get::Only-Upgrade=true# 或者用 unattended-upgrades（生产推荐，自动安全更新）4.卸载：# 卸载（保留配置文件）apt remove nginx# 彻底卸载（连配置文件一起删）apt purge nginx# 生产中注意：purge 会删 /etc/nginx/ 下的配置，确认不需要了再用# 清理不再需要的依赖包（类似&quot;垃圾回收&quot;）apt autoremove -y# 这个命令很实用，装完东西卸完东西后跑一下，清理孤立依赖5.查询：# 查看已安装的所有包dpkg -l# 或apt list --installed# 查看某个包是否安装dpkg -l nginx# 状态标记：ii=已安装, rc=已删除但配置残留, un=未安装# 查看包安装了哪些文件dpkg -L nginx# 反向查询：文件属于哪个包dpkg -S /usr/sbin/nginx# 输出：nginx-core: /usr/sbin/nginx# 查看包详细信息dpkg -s nginx6.本地.deb文件安装：# 安装本地deb包dpkg -i nginx_1.18.0-0ubuntu1_amd64.deb# -i：install# 如果报依赖错误，用这个修复apt install -f -y# -f：fix-broken，自动补装缺失的依赖# 卸载dpkg -r nginx      # 保留配置dpkg -P nginx      # 彻底删除（purge）
+
+
+2.5. 进程管理当我们运行一个程序，那么我们将运行的程序叫进程：
+
+当程序运行为进程后，系统会为该进程分配内存，以及进程运行的身份和权限
+在进程运行的过程中，服务器上会有各种状态来表示当前进程的指标信息程序和进程的区别：
+程序是数据和指令的集合，是一个静态的概念，比如&#x2F;bin&#x2F;ls &#x2F;bin&#x2F;cp 等二进制文件，同时程序可以长期存在系统中。
+进程是程序运行的过程，是一个动态的概念，进程是存在生命周期概念的，也就是说进程随着程序的终止而销毁，不会永久存在系统中
+
+思路：
+
+谁在吃 CPU？    → top &#x2F; ps
+谁在吃内存？    → top &#x2F; ps &#x2F; free
+谁在等 IO？     → top（看D状态）&#x2F; iostat
+谁在占端口&#x2F;文件？→ lsof &#x2F; ss
+
+进程状态：R	Running	     正在跑，或者在排队等CPUS	Sleeping	     在等事件（比如等网络请求回来），正常状态D	Disk sleep	 在等磁盘IO，不可中断，kill不掉Z	Zombie	     僵尸进程，已经死了但爹没来收尸T	Stopped	     被暂停了（比如 Ctrl+Z）比如说：
+
+生产中看到大量 D 状态 → 磁盘有问题（NFS挂了、磁盘故障）
+生产中看到大量 Z 状态 → 父进程有bug，没有 wait() 子进程
+
+2.5.1. 系统进程管理命令1.ps命令：# 【最常用】查看所有进程的完整信息（BSD风格）ps aux# a：显示所有用户的进程（不只是当前用户）# u：显示详细信息（用户、CPU、内存等）# x：包括没有终端的进程（守护进程）# 【最常用】查看所有进程的完整信息（System V风格）ps -ef# -e：所有进程# -f：完整格式（显示PPID等）# 两个的区别：# ps aux → 显示 %CPU、%MEM、STAT（状态）# ps -ef → 显示 PPID（父进程ID）、启动时间# 生产中两个都用，看不同信息USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMANDroot         1  0.0  0.1 193564  1544 ?        Ss   Jul01   0:03 /usr/lib/systemd/systemdnginx     1234  2.3  1.5 256884 15360 ?        S    10:23   1:12 nginx: worker processroot      5678 98.7  0.2  12345  2048 pts/0    R+   14:30  45:23 python3 crack.py| 列 | 含义 | 看什么 ||----|------|--------|| USER | 进程属主 | 排查：为什么有个www-data在跑bash？ || PID | 进程ID | 后续操作（kill、strace）都用它 || %CPU | CPU使用率 | 超过100%说明用了多核（比如400%=4个核跑满） || %MEM | 内存使用率 | 结合RSS看实际物理内存 || VSZ | 虚拟内存（KB） | 包含未实际分配的，参考意义不大 || RSS | 实际物理内存（KB） | 看这个！ 这才是真正占了多少内存 || TTY | 终端 | `?` 表示守护进程（没有终端），`pts/0` 表示有人ssh登录在跑 || STAT | 状态 | 重点看！下面详解 || START | 启动时间 | 排查：这进程什么时候起来的？ || TIME | 累计CPU时间 | 注意：不是运行时长，是实际占用CPU的时间 || COMMAND | 命令 | 看完整命令用 `ps aux | grep xxx` 或 `ps -ef --forest` |S    → 普通睡眠Ss   → s=会话首进程（session leader），比如systemd、sshdS&lt;   → &lt;=高优先级（nice值为负）SN   → N=低优先级（nice值为正）R+   → +=前台进程组Dl   → l=多线程Z+   → 僵尸+前台生产使用举例：# 按CPU排序，找出谁在吃CPUps aux --sort=-%cpu | head -20# 按内存排序，找出谁在吃内存ps aux --sort=-%mem | head -20# 查看某个进程（比如nginx）的所有进程ps -ef | grep nginx | grep -v grep# grep -v grep：排除grep自身（不然会多一行）# 查看进程树（看父子关系，排查&quot;这进程谁拉起来的&quot;）ps -ef --forest | grep -A5 nginx# 或者pstree -p | grep nginx# 查看某个PID的完整启动命令ps -p 1234 -o pid,ppid,user,%cpu,%mem,stat,start,time,cmd# -o：自定义输出列# 查看某个进程打开了哪些文件（配合lsof更详细）ls -l /proc/1234/fd/2.top命令： # 动态刷新 3秒一次默认top - 14:32:01 up 45 days,  3:21,  2 users,  load average: 12.50, 8.30, 4.20Tasks: 256 total,   1 running, 254 sleeping,   0 stopped,   1 zombie%Cpu(s): 75.3 us, 12.1 sy,  0.0 ni, 10.2 id,  2.1 wa,  0.0 hi,  0.3 siMiB Mem :  15884.5 total,   2103.2 free,   8934.1 used,   4847.2 buff/cacheMiB Swap:   2048.0 total,   2048.0 free,      0.0 used.   6521.3 avail Mem  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND 1234 www-data  20   0  256884  15360   8192 R  98.7   0.1   45:23.12 python3 | 字段 | 含义 | 怎么看 ||------|------|--------|| `up 45 days` | 运行时长 | 太长没重启可能有内存泄漏风险 || `2 users` | 当前登录用户数 | 排查：谁在服务器上？ || `load average: 12.50, 8.30, 4.20` | 1/5/15分钟平均负载 | 核心指标！ 下面详解 |负载值 / CPU核心数 = 每核负载# 查看CPU核心数nproc# 或cat /proc/cpuinfo | grep processor | wc -l# 判断标准（以4核为例）：# 负载 &lt; 4    → 正常# 负载 = 4    → 刚好跑满# 负载 &gt; 4    → 有进程在排队等CPU# 负载 &gt; 8    → 严重过载，需要立即排查| 缩写 | 全称 | 含义 ||------|------|------|| us | user | 用户态CPU（你的应用在跑） || sy | system | 内核态CPU（系统调用、上下文切换） || ni | nice | 低优先级进程占用 || id | idle | 空闲，这个高说明CPU不忙 || wa | iowait | 等IO，这个高说明磁盘是瓶颈 || hi | hardware interrupt | 硬中断 || si | software interrupt | 软中断（网络包处理） |# 生产中看到 wa &gt; 20% → 立刻查磁盘IO（iostat、iotop）# 生产中看到 si 很高 → 网络流量大，查网卡和连接数进入top后： # 区分大小写  P    → 按CPU排序（默认）  M    → 按内存排序  T    → 按运行时间排序  1    → 展开每个CPU核心的使用率（多核排查必用）  c    → 显示完整命令（不只是进程名）  H    → 显示线程（排查Java应用某个线程吃CPU）  k    → 输入PID直接kill  q    → 退出  d 2  → 刷新间隔改为2秒  生产环境使用举例：# 只看某个用户的进程top -u www-data# 只看某个PIDtop -p 1234# 批量看几个PIDtop -p 1234,5678,9012# 非交互模式（脚本里用，输出一次就退出）top -bn1 | head -20# -b：batch模式# -n1：只输出1次# 看线程级别（排查Java哪个线程吃CPU）top -Hp 1234# -H：显示线程# -p：指定进程# 然后记下吃CPU的线程PID（十进制），转十六进制去jstack里找printf &quot;%x\n&quot; 12345# 输出：3039 → 去jstack输出里搜 nid=0x3039补充工具：1.htop —— 增强版top：# 鼠标可以点击# 颜色区分更直观# 可以直接 F9 杀进程# 可以折叠/展开进程树（F5）# 安装yum install -y htop    # CentOSapt install -y htop    # Ubuntu# 使用htop2.pidstat —— 精确到进程的CPU/IO/内存统计：# 安装（属于sysstat包）yum install -y sysstat# 每2秒采样一次，共采5次，看所有进程的CPUpidstat -u 2 5# -u：CPU统计# 2：间隔2秒# 5：采5次# 看某个PID的CPUpidstat -u -p 1234 2 5# 看IO统计（谁在读磁盘、谁在写磁盘）pidstat -d 2 5# -d：disk IO# 看内存pidstat -r 2 5# 看上下文切换（排查锁竞争）pidstat -w 2 5# -w：显示自愿/非自愿上下文切换次数# 非自愿切换多 → 被抢占，CPU竞争激烈# 自愿切换多 → 主动让出，在等锁/IO3.lsof —— 谁在用什么文件/端口# 谁在监听哪个端口# 谁打开了哪个文件# 谁在占用某个目录（导致 umount 失败）# 安装yum install -y lsof# 【高频】查看谁在监听80端口lsof -i :80# 输出：# COMMAND   PID   USER   FD   TYPE DEVICE SIZE/OFF NODE NAME# nginx    1234   root    6u  IPv4  12345      0t0  TCP *:http (LISTEN)# nginx    1235 www-data 6u  IPv4  12345      0t0  TCP *:http (LISTEN)# 【高频】查看某个进程打开了哪些文件lsof -p 1234# 【高频】查看谁在占用某个文件（比如日志文件被删了但空间没释放）lsof | grep deleted# 生产中经典场景：rm了日志文件但磁盘空间没释放# 原因：进程还持有文件句柄，文件没真正删除# 解决：重启进程，或者 &gt; /proc/PID/fd/FD号 清空# 查看谁在占用某个目录（umount报busy时用）lsof +D /data# +D：递归查看目录下所有被打开的文件# 查看某个用户的所有打开文件lsof -u www-data# 查看网络连接lsof -i tcplsof -i udplsof -i @192.168.1.100    # 和某个IP的所有连接4.kill（杀进程）# 原则：线上优先用 -15，给了机会释放资源；如果进程卡死（D状态），-15无响应，再用 -9。# 面试官可能会问：进程杀不死怎么办？答：看状态 ps aux 里 STAT 列，如果是 D（不可中断睡眠），通常是等待IO，内核操作，杀不掉，只能等IO返回，或者重启机器；如果是 Z（僵尸），已经死了父进程没回收，可以杀掉父进程让init领养回收。# 优雅终止（发SIGTERM信号，进程可以捕获并做清理）kill 1234# 等同于 kill -15 1234# 强制杀死（发SIGKILL信号，内核直接杀，进程无法捕获）kill -9 1234# 暂停进程kill -STOP 1234    # 或 kill -19# 恢复进程kill -CONT 1234    # 或 kill -185.sleep:# 默认单位是秒(s)，也可以用 m(分钟)、h(小时)、d(天)sleep 5        # 睡 5 秒sleep 1m       # 睡 1 分钟sleep 2h       # 睡 2 小时sleep 0.5      # 睡 0.5 秒（shell 支持小数，但某些老系统不行）sleep 3000 &amp;:	sleep 3000：让进程睡 3000 秒（50 分钟）。	&amp;：放到后台执行，不占用当前终端。执行完这行，系统会返回一个后台作业编号（比如 [1] 12345），然后你的终端立即可用，同时有一个 sleep 进程在后台倒计时。6.优先级调整（nice / renice）：# nice 值越高 表示优先级越低，例如+19 该进程容易将 CPU 使用量让给其他进程# nice 值越低 表示优先级越高，例如-20, 改进程更不倾向于让出 CPU# NI:实际 nice 级别，默认是 0 动态修正 CPU 调度，范围（-20~19）：越大，cpu 调度越一般，越小，cpu 调度越偏向它。一般用于后台进程，调整也是往大了调，用来给前台进程让出 CPU 资源# PR: 优先级 显示 nice 值，PR 默认是 20，越小，优先级越高。修改 nice 可以同时修改 PR -20 映射到 0， +19 映射到 39# 启动时指定优先级（-20最高，19最低，默认0）nice -n 10 tar czf backup.tar.gz /data/# 让备份任务低优先级跑，不影响业务# 修改已运行进程的优先级renice -n 10 -p 1234# 注意：只有root才能提高优先级（nice值为负）# 普通用户只能降低（nice值为正）7.后台运行:# 方法1：nohup（退出终端后进程不死）nohup python3 task.py &gt; /var/log/task.log 2&gt;&amp;1 &amp;# nohup：忽略SIGHUP信号# &gt; /var/log/task.log：标准输出重定向# 2&gt;&amp;1：标准错误也重定向到同一个文件# &amp;：放后台# 方法2：screen / tmux（推荐！可以随时回来看）tmux new -s mytaskpython3 task.py# Ctrl+B 然后按 D → 脱离会话# 回来看：tmux attach -t mytask# 方法3：systemd（生产正规做法）# 写个unit文件，用systemctl管理
+
+2.5.2. &#x2F;proc 文件系统 —— 进程的”身份证”&#x2F;proc 内存的映射    &#x2F;proc&#x2F;cpuinfo 查看cpu的信息    &#x2F;proc&#x2F;meminfo 查看内存的信息    &#x2F;proc&#x2F;loadavg 查看负载的信息    &#x2F;proc&#x2F;mounts 查看挂载的信息 后面的重点
+/proc/PID/ 目录下有进程的所有信息，这是最底层的数据来源：# 查看进程的完整启动命令（比ps看到的更完整）cat /proc/1234/cmdline | tr &#x27;\0&#x27; &#x27; &#x27;# 查看进程的工作目录ls -l /proc/1234/cwd# 输出：lrwxrwxrwx 1 root root 0 Jul 27 14:30 /proc/1234/cwd -&gt; /data/app# 查看进程的可执行文件路径ls -l /proc/1234/exe# 输出：lrwxrwxrwx 1 root root 0 Jul 27 14:30 /proc/1234/exe -&gt; /usr/bin/python3# 查看进程打开的所有文件描述符ls -l /proc/1234/fd/# 排查&quot;文件删了空间没释放&quot;就看这里# 查看进程的环境变量cat /proc/1234/environ | tr &#x27;\0&#x27; &#x27;\n&#x27;# 查看进程的内存映射cat /proc/1234/maps# 查看进程的状态（比ps更详细）cat /proc/1234/status# 里面有：VmRSS（实际物理内存）、VmSize（虚拟内存）、Threads（线程数）# 查看进程的IO统计cat /proc/1234/io# read_bytes / write_bytes：实际磁盘IO量# 查看系统级别的进程限制cat /proc/sys/kernel/pid_max        # 最大PIDcat /proc/sys/kernel/threads-max    # 最大线程数
+
+
+2.5.3. 内存管理命令# 内存管理：看剩多少、谁在吃、有没有泄漏free -h   # 人类可读vmstat 看系统虚拟内存状态：vmstat 1   # 每秒输出一行# 关注 si (swap in) 和 so (swap out)。如果这两个一直非零，说明系统在疯狂换入换出，内存告急。pmap 看进程的内存分布pmap -x &lt;pid&gt; | head -20   # 进程的内存映射详情
+
+
+2.5.4. 系统负载命令# 系统负载：看机器累不累、是CPU累还是IO累uptime 看负载数字# 输出： 15:30:01 up 120 days, 23:15,  2 users,  load average: 1.50, 1.20, 1.10这三个数字是1、5、15分钟的平均负载，表示正在运行+不可中断等待（D状态）的任务数。和CPU核心数有关，单核负载超过1就有排队，8核超过8就要查了。iostat 查看IO（负载的幕后黑手）iostat -xz 1   # 关注 %util 和 await、svctm# 如果 %util 接近100%，说明磁盘很忙；await 远大于 svctm 说明IO有排队。#　结合负载排查：top 看到 wa（iowait）高，就用 iostat 确认哪块盘慢，再配合 pidstat -d 找进程。补充：需要掌握的下面的查看操作系统硬件信息的命令:1.lscpu  查看cpu的信息2.free   查看内存的信息    free -h3.df     查看磁盘信息        df -h4.uptime 查看系统负载# 10:48:41 up  10 min,  1 user,   load average: 0.01,  0.08,  0.10# 当前时间   运行时长  1个登录用  平均负载   1分钟  5分钟  15分钟5.w 查看系统负载和用户登录信息# [root@db01 ~]# w# 11:12:15 up 33 min,  1 user, load average: 0.00, 0.01, 0.05# 登录用户 终端   哪个IP连接的我  登录时间           当前执行的命令# USER   TTY   FROM       LOGIN@  IDLE  JCPU  PCPU  WHAT# root   pts/0   10.0.0.1     10:39   7.00s  0.36s  0.00s  w
+
+
+2.6. 用户管理2.6.1. 用户分类用户类型        作用-------------  -----------------root           管理员    拥有最高权限,类似皇帝oldboy         普通用户  拥有个人用户的最高权限 类似平民 登录系统(优化系统，更加安全)虚拟用户        傀儡用户  启动进程必须使用一个用户来运行，此用户不需要登录操作系统，只为了运行程序而存在系统分类表示方式: 使用UID表示 类似身份证号用户   UID号码(系统默认)管理员            0普通用户          1000+虚拟用户          1-999
+
+2.6.2. 用户相关文件passwd及命令[root@db01 ~]# cat /etc/passwdroot:x:0:0:root:/root:/bin/bashgetent passwd | awk -F: &#x27;&#123;print $1&#125;&#x27; #只看用户名以冒号分隔:第一列: 用户名称 管理员普通用户和虚拟用户体现的位置第二列: x 用户的密码第三列: 0 用户的UID号第四列: 0 用户的GID号 小组的号码第五列: root 描述信息 可写可不要第六列: /root 用户的家目录 管理员/root 普通该用户oldboy家目录---&gt;/home/oldboy/第七列: 命令解释器        /bin/bash   普通用户包括root，允许登录操作系统        /sbin/nologin 虚拟用户 不允许登录操作系统        /etc/skel/ 作用: 所有用户的家模版创建用户的流程:    1.创建用户(useradd oldboy)    2.系统会将/etc/skel/隐藏的环境变量文件 复制到/home/oldboy/家目录中隐藏文件    3.系统将隐藏文件属主属组修改为普通用户passwd文件：- etc/shadow：用户密码信息- etc/group: 用户的组信息- etc/skel:所有用户的家模板-------------------------------------------------------------------1.用户添加：useradd 语法格式: useradd [参数选项] 用户名称参数选项:-s  指定解释器 /bin/bash /sbin/nologin 这个用户只能用来跑程序、跑服务，但不能登录系统。-u  指定UID 身份证 如果不指定默认往后排-g  指定GID 组号-M  不创建家目录，如果不使用-M 创建家目录-G  附加组 了解举例说明：1.创建一个普通用户oldboy，默认可以不加任何参数[root@db01 ~]# useradd oldboy查看普通用户的信息[root@db01 ~]# id oldboyuid=1001(oldboy) gid=1002(oldboy) groups=1002(oldboy)[root@db01 ~]# grep &#x27;oldboy&#x27; /etc/passwdoldboy:x:1001:1002::/home/oldboy:/bin/bash2.创建一个虚拟用户 uid888 gid888 不创建家目录 不允许登录系统 test01 第一步: 创建组[root@db01 ~]# groupadd -g888 test01第二步: 创建用户[root@db01 ~]# useradd -u888 -g888 -M -s /sbin/nologin test01[root@db01 ~]# id test01uid=888(test01) gid=888(test01) groups=888(test01)-------------------------------------------------------------------2.删除用户：userdel    -r  删除用户相关的所有文件-------------------------------------------------------------------3.su - 切换用户# root切换到普通用户  不需要密码# 普通用户切换到root  需要root的密码# 普通用户切换到普通用户 需要密码举例：# 1.你用一个普通账号（比如 zhangsan）ssh 登录服务器，临时要装个包/改个配置，需要 root 权限# 2.半夜排查问题，要在某个应用账号（比如 mysql、www-data）的环境里跑命令，因为那个账号的 PATH、家目录、密钥才对# 3.面试必问：&quot;su 和 su - 的区别？&quot;&quot;su 和 sudo 的区别？&quot;&quot;生产环境怎么管理 root 权限？&quot;核心：带 -  =  完全&quot;变成&quot;那个人（连他家、他的习惯、他的环境变量全搬过来）  → login shell不带 - =  只是&quot;借用&quot;那个人的身份干活，但你还站在自己家，穿着自己的衣服  → non-login shell┌─────────────────────────────────────────────────────────────┐│  login shell（su - / su - root / ssh 登录 / 开机登录）        ││  读取顺序：                                                  ││   /etc/profile                                              ││     → ~/.bash_profile  （或 ~/.bash_login / ~/.profile）      ││        → 通常这里面会 source ~/.bashrc                        ││  结果：环境变量、PATH、家目录 全部换成目标用户的                 │├─────────────────────────────────────────────────────────────┤│  non-login shell（su / su root / 终端里再开一个 bash）         ││  读取顺序：                                                  ││   ~/.bashrc   （只读这一个，不读 profile 系列）                ││  结果：身份变了，但 PATH/部分环境变量 还是原来用户的             │└─────────────────────────────────────────────────────────────┘用 su root（不带横杠）切过去后，echo $PATH 里可能还残留着普通用户的路径，root 专属的 /usr/sbin、/sbin 有时不在里面 → 导致某些命令 command not found。这就是不带横杠的经典坑。附表：见下面sudo提权-------------------------------------------------------------------4.密码修改：# 核心答案：加密后的密码存在 /etc/shadow 文件中，/etc/passwd 里只是用户信息，不存密码。passwd username          # 给指定用户改密码（root 用）passwd                   # 普通用户自己改自己的密码
+
+2.6.3. 用户提权sudo
+
+
+命令
+切换后身份
+当前目录
+HOME 变量
+PATH&#x2F;环境
+要输谁的密码
+shell 类型
+
+
+
+su
+root
+不变（还在 &#x2F;home&#x2F;zhangsan）
+不变
+不加载 root 的
+root
+non-login
+
+
+su root
+root
+不变
+不变
+不加载
+root
+non-login
+
+
+su -
+root
+&#x2F;root
+&#x2F;root
+加载 root 的
+root
+login
+
+
+su - root
+root
+&#x2F;root
+&#x2F;root
+加载
+root
+login
+
+
+su mysql
+mysql
+不变
+不变
+不加载
+mysql
+non-login
+
+
+su - mysql
+mysql
+&#x2F;home&#x2F;mysql 或 &#x2F;var&#x2F;lib&#x2F;mysql
+对应用户
+加载
+mysql
+login
+
+
+作用: 可以让普通用户执行命令时候，相当于root的权限举例说明：# 在普通用户窗口测试: 查看日志没有权限# [oldboy@db01 ~]$ cat /var/log/messages# cat: /var/log/messages: Permission denied对oldboy用户执行的cat命令进行提权：oldboy用户在执行cat时候就相当于root管理员visudo  ======= vim /etc/sudoers编辑配置文件两种方式:一种直接visudo回车 # 有语法检测的功能一种是使用vim 编辑/etc/sudoers查看命令的绝对路径:[root@db01 ~]# which cat/usr/bin/cat配置oldboy提权cat单条命令visudo 直接回车编辑文件:[root@db01 ~]# grep oldboy /etc/sudoersoldboy  ALL=(ALL)    /usr/bin/cat配置提权的格式:1.授权单个命令oldboy  ALL=(ALL)    /usr/bin/cat2.授权多个命令 授权给开发 测试人员[root@db01 ~]# grep oldboy /etc/sudoersoldboy  ALL=(ALL)    /usr/bin/cat,/usr/bin/cd3.授权给运维人员(危险危险危险)oldboy  ALL=(ALL)    NOPASSWD: ALL4.对all进行取反[root@db01 ~]# grep oldboy /etc/sudoersoldboy  ALL=(ALL)    NOPASSWD: ALL,!/usr/bin/rm返回到普通用户执行cat命令：[oldboy@db01 ~]$ sudo -l # 查看自己拥有的提权后的命令[sudo] password for oldboy: # 输入oldboy自己的密码[oldboy@db01 ~]$ sudo cat /var/log/messages  # 可以正常查看系统日志last  # 显示登录详细信息登录用户  终端     来源IP地址(公司|家) 登录时间     退出时间 总共待了多久root   pts/0     123.112.17.72  Thu Mar 21 15:14 - 15:15   (00:00)lastlog # 显示用户最后的一次登录时间
+
+
+
+3. 文件管理3.1. 系统目录结构
+/  （总根目录，整个Linux系统的唯一入口，所有文件都在这里）├── /etc      # 系统/服务的核心配置文件目录├── /root     # root管理员的专属家目录（ssh登录root默认在这里）├── /home     # 所有普通用户家目录的父目录│   ├── /home/oldboy  # 普通用户oldboy的家目录│   └── /home/test    # 普通用户test的家目录├── /usr      # 用户程序/软件安装目录│   ├── /usr/local  # 第三方软件最常用的安装目录（/usr/local/mysql）│   ├── /usr/bin    # 普通用户可执行的命令（ls、cat、vim、rz/sz）│   └── /usr/sbin   # root管理员专属命令（useradd、fdisk、firewall-cmd）├── /var      # 可变数据目录（日志、数据库数据都在这）│   ├── /var/log    # 系统/服务日志目录（mysql日志、系统messages日志）│   └── /var/lib    # 程序运行数据（mysql数据文件、docker数据）├── /mnt      # 临时挂载目录（挂U盘、移动硬盘、额外磁盘）├── /opt      # 第三方软件可选安装目录（Tomcat、Redis等可以放这）├── /proc     # 内存映射的虚拟目录（不占磁盘，看CPU、内存、进程信息）├── /dev      # 硬件设备文件目录（磁盘/dev/sda、终端/dev/tty都在这）├── /boot     # 系统启动目录（内核、grub引导程序都在这，坏了系统开不了机）├── /bin      # 系统启动必备的基础命令（单用户模式也能用）├── /sbin     # 系统启动必备的管理员命令└── /tmp      # 系统临时文件目录（所有用户都能读写，重启后自动清空）
+
+3.2. 文件属性1.文件类型分类：- f 普通文件    regular file- d 目录        directory- l 软链接      symbolic link- c 字节设备    character device file- b 块设备      block device file- p：管道设备- s：接口文件socket2.属性说明：[root@localhost ~]# ll -itotal 433582991 -rw-------.       1     root     root 1534 Dec 29 03:20 anaconda-ks.cfg51151705 drwxr-xr-x.       2     root     root  100 Jan 23 19:04 local50564820 drwxr-xr-x.       7     root     root  160 Jan 20 19:14 oldboy-------  - ---------      --     ----     ----  -----------      ------第一列   |第二列 |第三列    |第四列 |第五列  |第六列 |第七列 |第八列     |第九列======================================================第一列：inode号码作用：存放具体内容的指针指向，查找文件内容的时候先找到inode号码，类似书本的目录，用ls -i 查看，存放的是指向磁盘空间具体的存储位置这里补充：对inode号码查询    df -i 查看总inode    df -h 查看block 磁盘大小    ll -i 查看文件的inode号inode号码或者磁盘空间任意一个满，都会导致磁盘无法写入-----------------------------------------------------------------------------第二、三列：文件类型以及权限，首字母为文件类型，普通文件-。-----------------------------------------------------------------------------第四列：硬链接个数    - 普通文件（如 anaconda-ks.cfg）：默认是 1，代表只有 1 个硬链接指向该文件    - 目录（如 local）：数值 = 该目录下的子目录数 + 1（包含.（当前目录）和..（上级目录））-----------------------------------------------------------------------------第五列：文件 / 目录的所有者（属主）：该文件归哪个用户所有，示例中都是 root 用户。-----------------------------------------------------------------------------第六列：文件 / 目录的所属组（属组）：该文件归哪个用户组所有，示例中都是 root 组。-----------------------------------------------------------------------------第七列：文件大小：单位是字节（Byte）：    - 普通文件：真实的文件内容大小（如 1534 字节）    - 目录：不是目录内文件的总大小，而是目录本身（存储子文件 / 目录名等元数据）的大小（如 100 字节）！！！！-----------------------------------------------------------------------------第八列：最后修改时间：文件 / 目录内容最后一次被修改的时间，格式为 “月 日 时：分”（若超过 6 个月会显示年份）。-----------------------------------------------------------------------------第九列：文件名 / 目录名：文件或目录的名称。补充：文件的时间[root@db01 ~]# stat a.txtFile: ‘a.txt’Size: 11    Blocks: 8     IO Block: 4096  regular fileDevice: 803h/2051d Inode: 33574990  Links: 1Access: (0755/-rwxr-xr-x) Uid: (   0/  root)  Gid: (   0/  root)Access: 2024-03-14 15:14:32.445766490 +0800Modify: 2024-03-14 15:15:17.823769895 +0800Change: 2024-03-14 15:16:19.004774485 +0800
+
+
+[!note] 对文件类型进一步补充
+
+1.l 软链接：       [root@localhost local]# ll /etc/rc.local       lrwxrwxrwx. 1 root root 13 Dec 29 04:10 /etc/rc.local -&gt; rc.d/rc.local2.b 块设备 硬设备：       [root@localhost local]# ll /dev/sr0           brw-rw----. 1 root cdrom 11, 0 Feb  5 12:40 /dev/sr0       [root@localhost local]# ll /dev/sda1           brw-rw----. 1 root disk 8, 1 Feb  5 12:40 /dev/sda13.c 字节设备：       [root@localhost local]# ll /dev/urandom           crw-rw-rw-. 1 root root 1, 9 Feb  5 12:40 /dev/urandom       [root@localhost local]# ll /dev/zero           crw-rw-rw-. 1 root root 1, 5 Feb  5 12:40 /dev/zero       [root@localhost local]# ll /dev/null           crw-rw-rw-. 1 root root 1, 3 Feb  5 12:40 /dev/null对于字节设备，主要用下面3个：1.  urandom:查看此文件，一直不停的往外吐数据2.  /dev/zero:生成定量数据 测试用     dd if=/dev/zero of=10g.txt bs=1M count=10000    #生成10G内容     dd：命令     if: input file |   of: output file     bs:block size 每次读取多大     count：读取次数     注意：厂家的磁盘大小计算是直接以1000为单位，而非1024，例如上面是生成的10G内容，但是实际大小只会占用到9.8G左右。3.  /dev/null:持续不断的吃数据，将执行命令结果定向到null文件中     实际应用：写shell将不需要显示到屏幕的结果扔进去，按照自己的编辑的内容进行格式化输出     比如说：     [root@localhost ~]#  ping -W1 -c1 www.baidu.com &gt; /dev/null     [root@localhost ~]# echo $?     0     [root@localhost ~]#  ping -W1 -c1 www.baidadaddadu.com &gt; /dev/null     ping: www.baidadaddadu.com: Name or service not known     [root@localhost ~]# echo $?     2     echo的作用：主要是$?，存储上一条命令的执行结果，是0则代表成功，反之非0失败
+
+3.3. 文件后缀总结.service — systemd 的服务单元文件.d 结尾的目录 — 配置碎片化目录这不是一个文件，而是一个目录命名规范。含义：一个主程序不再只读一个大的配置文件，而是读一个目录下的所有配置文件。举例：/etc/nginx/conf.d/：Nginx 的主配置会 include conf.d/*.conf，你可以把不同站点拆成 site1.conf、site2.conf，互不干扰。.conf — 配置文件作用：最泛用的配置文件后缀，程序约定俗成会读这种文件。典型：/etc/nginx/nginx.conf、/etc/my.cnf（MySQL）、/etc/resolv.conf。.socket — systemd 的套接字激活文件场景：让 systemd 先监听端口，有请求时才唤醒服务，省资源。常用于那些不常被访问的服务。.timer — systemd 的定时器，替代 cron对应：每个 .timer 文件必须搭配一个同名的 .service 文件。.target — systemd 的运行级别（启动目标）作用：定义一个系统状态，比如 multi-user.target（命令行多用户模式）、graphical.target（图形界面）。类比：旧版的运行级别 init 3、init 5。面试：default.target 是开机默认进入哪个目标，可以 systemctl get-default 查看。
+
+3.4. 文件权限作用: 决定了用户对于文件的权限前三位: 属主      # 哪个用户创建的文件，文件的主人 权限  rw- 可读写 中三位: 属组      # 属于小组内的成员对于文件的权限       r--   只读权限后三位: 其他人   # 陌生人 既不是主人也不在小组内         r--   只读权限-------------------------------------r read    读 # 查看 cat less vimw write   写 # vim sed echo &gt; &gt;&gt;x excute  可执行 # 普通文件没有x权限，脚本才给x执行权限- 空的权限-------------------------------------r ==== 4w ==== 2x ==== 1通过数字的方式表示文件的权限:rw-r--r-- 通过数字表示方式为: 将每3位的权限位置换算成数字进行相加等于644rw- 属主--&gt;数字 420 4+2+0=6r-- 属组--&gt;数字 400    =4r-- 其他--&gt;数字 400    =4常见的代码：644：所有者可读可写，组 / 其他仅可读（普通配置文件）755：所有者可读可写可执行，组 / 其他仅可读可执行（普通目录 / 可执行脚本）600：仅所有者可读可写（敏感文件 / 密码文件）700：仅所有者可读可写可执行（敏感目录 / 用户家目录）777：禁止使用（所有用户全权限，高危）普通文件最高权限: 666在企业中所有普通文件权限最高必须为: 644# 1.如果可以正常对文件进行查看写入权限 目录必须有: r和x权限# 2.如果想要在目录下创建 移动 删除操作，目录必须有: rwx权限---------------------------------------------------------------------Linux系统默认权限总结：统默认在创建用户的时候，会自动创建出和用户名称一样的组。比如:创建一个oldboy用户 则系统会自动创建一个 oldboy组，默认oldboy用户属于oldboy组文件的默认权限: rw-r--r--目录的默认权限: rwxr-xr-x系统通过UMASK值控制默认的创建权限:1.查看UMASKumask 回车[root@db01 ~]# umask0022用文件最高的权限减去UMASK默认的值等于默认创建文件的权限: 666 - 022 = 644 默认文件权限用户目录的最高权限减去默认UMASK值 777 - 022 = 755注意: 如果UMASK值里有奇数位，则文件需要相减后加1目录不需要加1比如: 设置umask值032则默认文件权限为:666 - 032 =634 +010 =6442.修改UMASK值 临时[root@db01 ~]# umask 044[root@db01 ~]# umask0044# 笔试题: 如果默认创建000属性的文件请问UMASK值是多少# umask: 666---------------------------------------------------------------------隐藏权限--保护系统文件安全:1.查看文件隐藏权限[root@db01 ~]# lsattr 1.txt---------------- 1.txt2.设置隐藏权限    i 无敌的，谁也无法对1.txt对任何的操作    a 无敌的，只可以追加内容进去 &gt;&gt;[root@db01 ~]# chattr +i 1.txt[root@db01 ~]# lsattr 1.txt----i----------- 1.txt3.取消隐藏权限[root@db01 ~]# chattr -i 1.txt[root@db01 ~]# chattr +a 1.txt[root@db01 ~]# lsattr 1.txt-----a---------- 1.txt注意: 企业中除了隐藏权限无法修改文件以外，还需要注意第三方安全软件限制着文件特殊权限位: 了解1.suid 给文件或命令添加s权限，则拥有对应主人的权限[root@db01 ~]# ll /usr/bin/rm-rwxr-xr-x. 1 root root 62872 Aug 20  2019 /usr/bin/rm[root@db01 ~]# chmod u+s /usr/bin/rm[root@db01 ~]# ll /usr/bin/rm-rwsr-xr-x. 1 root root 62872 Aug 20  2019 /usr/bin/rm[root@db01 ~]# stat /usr/bin/rm[root@db01 ~]# chmod u-s /usr/bin/rm[root@db01 ~]# ll /usr/bin/rm-rwxr-xr-x. 1 root root 62872 Aug 20  2019 /usr/bin/rm2.粘滞位 控制自己的文件只能自己管理 /tmp目录就是粘滞位权限 1777在系统创建一个目录: 可以让任何用户在目录中创建文件
+
+3.5. 文件权限修改
+[!tip] 赋权规范
+
+1.严禁使用 777 权限：任何场景都不要给文件 / 目录赋chmod 777（所有用户都有读写执行权限），会导致文件被篡改、敏感信息泄露，面试被问到「为什么不用 777」必须答「最小权限原则，避免权限泄露和恶意攻击」。2.递归赋权（-R）只改业务目录：禁止对/etc、/bin、/usr等系统目录用chmod -R/chown -R，会误改系统文件权限，直接导致系统崩溃。3.服务文件权限匹配运行用户：Nginx 文件归nginx:nginx、Docker 文件归docker:docker、MySQL 文件归mysql:mysql，这是生产环境服务正常运行的前提。4.赋权前先备份：对重要配置文件 / 日志文件赋权前，可先备份（cp 原文件 原文件.bak），避免误改权限导致服务故障。
+
+3.5.1. 修改访问权限（r&#x2F;w&#x2F;x）：chmod1.数字法：背    644：文件通用权限属主读写、属组读、其他读），适用于配置文件、日志文件、静态业务文件（生产90%的文件用这个）。    755：脚本/可执行文件/目录通用权限（属主读写执行、属组读执行、其他读执行），适用于shell脚本、系统命令、公共业务目录。    750：业务私密目录权限（属主读写执行、属组读执行、其他无权限），适用于 Nginx 网站根目录、企业业务项目目录（最小权限原则）。举例说明：# 给app.conf配置文件赋644权限（生产标准）chmod 644 /data/app.conf# 给start.sh脚本赋755可执行权限（必须加x才能运行）chmod 755 /data/start.sh# 给/project业务目录赋750私密权限chmod 750 /project-------------------------------------------------------------------------------2.符号法：适用于「只加/只删某一个权限」语法格式：chmod [u/g/o/a][+/-/=][r/w/x] 文件名/目录名u主 g组 o其他用户 a所有用户+加 -减 =强制赋值（等号为重新复制，先清空后附加权限）chmod a+x file # 授权所有位chmod a-x file # 取消所有x权限chmod +x file # 授权所有位xchmod -x file # 取消所有位xchmod ugo+r file # 授权所有rchmod ugo-x file # 取消所有xchmod ugo=rw file # 授权所有位置只有rw权限 等号先清空原来的权限 然后再赋值等号后面的权限举例说明：# 只给属主加写权限，不改动其他权限chmod u+w /data/test.txt# 只给属组删执行权限chmod g-x /data/start.sh# 强制给其他用户赋「只读」权限（覆盖原有所有权限）chmod o=r /data/public.txt---------------------------------------------------------------------补充：生产高频参数：`-R` 递归赋权（目录专用）chmod -R [权限] 目录名# 递归给/project目录及所有子文件赋750权限（项目部署必用）chmod -R 750 /project
+
+3.5.2. 修改属主 &#x2F; 属组（权限生效的前提）：chown作用：修改文件/目录的所有者（属主）和所属组（属组），让权限能精准匹配到对应的用户/组（比如Nginx文件归 nginx用户、业务文件归 dev开发用户）。# 语法1：同时改属主和属组（属主:属组，冒号无空格）chown 属主:属组 文件名/目录名# 语法2：只改属主chown 属主 文件名/目录名# 语法3：递归改目录及所有子文件的属主属组（生产高频）chown -R 属主:属组 目录名举例说明：将 Nginx 网站根目录的属主属组改为 Nginx 运行用户`nginx:nginx`，否则 Nginx 无权限读取网站文件：# 递归修改/usr/local/nginx/html目录的属主属组为nginx:nginxchown -R nginx:nginx /usr/local/nginx/html
+
+3.5.3. 专门修改所属组：chgrp作用：仅修改文件/目录的所属组，功能是`chown`的子集，语法比`chown`繁琐，生产环境几乎不用（直接用`chown 属主:属组`更高效）。# 普通修改所属组chgrp 属组 文件名/目录名# 递归修改chgrp -R 属组 目录名举例说明：示例：将 test.txt 的所属组改为 dev 组chgrp dev test.txt
+
+
+3.6. 文件查找语法结构:    find 在哪里找 按照什么类型查找    find ./ -type 文件类型注意: find默认是递归查找文件，(./表示当前所在文件目录)------------------------------------------------------------1.find ./ -name  &quot;&quot;          # 按名称查找2.find ./ -iname &quot;&quot;          # 不区分大小写3.find ./ -inum  &quot;&quot;          # 按inode号码查找4.find ./ -type f/d/C.       # 按文件类型查找  d就可以查找目录5.find ./ -type f -name &quot;&quot;   # 联合查询默认并且 同时成立6.find ./ -maxdepth 1 -type f # 按照深度等级查找7.按文件大小查找：语法: find ./ -size 10M  # 查找10M的文件           +10M  # 查找大于10M的文件           -10M  # 查找小于10M的文件默认参数之间关系是并关系  -a  and   -o -or# 大于10M 且 小于15M（-a是and缩写，可省略） # 省略-a，效果完全一致（默认是“并且”）find ./ -size +10M -a -size -15M# 标准写法（-o 更常用）find ./ -size 10M -o -name &quot;1.txt&quot;8.按文件的修改时间查找：语法:  find ./ -mtime +7  # 7天前被修改过的文件                      -7  # 7天内被修改过的文件-mmin 分钟-newermt 具体时间 GNU/Linux 专属，直接指定 “年 - 月 - 日 时：分”# 1. 精确到小时：查找1小时内（60分钟内）修改的文件find ./ -mmin -60# 2. 精确到小时：查找1~2小时之间（60~120分钟）修改的文件find ./ -mmin +60 -mmin -120# 3. 组合条件：查找30分钟内修改的、后缀为.txt的文件find ./ -mmin -30 -name &quot;*.txt&quot;# 格式：find 路径 -newermt &quot;年-月-日 时:分&quot;# 支持的时间格式：&quot;YYYY-MM-DD HH:MM&quot; 或 &quot;MM/DD/YYYY HH:MM&quot; 等# 1. 查找 2026-02-10 14:30 之后修改的文件find ./ -newermt &quot;2026-02-10 14:30&quot;# 2. 查找 2026-02-10 14:00 ~ 2026-02-10 15:30 之间修改的文件# 思路：找“比14:00晚”且“比15:30早”的文件（! 表示取反）find ./ -newermt &quot;2026-02-10 14:00&quot; ! -newermt &quot;2026-02-10 15:30&quot;# 3. 结合大小：查找14:30后修改的、大于10M的文件find ./ -newermt &quot;2026-02-10 14:30&quot; -size +10M面试题: 查找出oldboy目录下修改时间为7前天的文件并删除find /oldboy -type f -mtime 7 -exec rm -f &#123;&#125; \;---------------------------------------------------------------------find结合其他命令执行：1.xargs将find查找到的结果甩到命令的最后面，xargs后面的别名失效find ./ -name &quot;1.txt&quot;|xargs rm -r     #删除目录需要加-rfind ./ -name &quot;1.txt&quot;|xargs ls -l     #查看详细信息find ./ -name &quot;1.txt&quot;|xargs -i cp &#123;&#125; /opt/ # 复制，&#123;&#125;表示占位符补充：xargs -n1    # 1个单词一行（最常用）  分行xargs -n2    # 2个单词一行xargs -n3    # 3个单词一行echo &quot;I am lizhenya&quot; | xargs -n1xargs -d &#x27;:&#x27;    # 按冒号分割xargs -d &#x27;,&#x27;    # 按逗号分割xargs -d &#x27;|&#x27;    # 按竖线分割echo &quot;aaa:bbb:ccc&quot; | xargs -d &#x27;:&#x27; -n1xargs -I &#123;&#125;         # 批量操作最常用echo &quot;dir1 dir2 dir3&quot; | xargs -n1 | xargs -I &#123;&#125; mkdir &#123;&#125;  # 批量创建目录# 处理空格文件名： 比如说 my file.txt这种# find . -name &quot;*.log&quot; -print0 | xargs -0 -P 4 -n 50 rm# 搭配使用，前面print0先用0分隔开每个文件名，后面按0对每个文件操作#                                  -0 安全分隔#                                  -P 4  开4个进程并行删（快）#                                  -n 50 每批50个文件2.-exec实现:\;：-exec 的结束标记（\ 转义 ;，避免被 shell 提前解析，逐个处理文件，兼容含空格 / 特殊字符的文件名，安全可靠。find ./ -name &quot;1.txt&quot; -exec rm &#123;&#125; \;         #在当前目录及所有子目录下，查找名称精确为 1.txt 的文件，并逐个删除。find ./ -name &quot;1.txt&quot; -exec ls -l &#123;&#125; \;       #查找所有 1.txt 文件，并逐个以长格式（ls -l）显示文件详情（权限、大小、修改时间、路径等）。find ./ -name &quot;1.txt&quot; -exec cp &#123;&#125; /opt \;    #查找所有 1.txt 文件，逐个复制到 /opt 目录下。3.直接用&#x27;&#x27;引起来：优化建议（推荐写法）：# 替代 rm -f `find ...`rm -f $(find ./ -name &quot;1.txt&quot;)#先执行 find 找到所有 1.txt 的路径（空格分隔），再将这些路径作为参数传给 rm -f，一次性删除所有匹配文件。rm -f `find ./ -name &quot;1.txt&quot;`                #将 find 找到的所有 1.txt 文件，一次性复制到 /opt 目录下cp `find ./ -name &quot;1.txt&quot;` /opt/             
+
+
+3.7. 文件压缩&amp;解压tar命令:语法:   tar zcvf 名称.tar.gz 文件1 文件2 文件3# 注意：.tar.gz 后缀不可修改，linux标准压缩包格式     z : 使用zip 压缩     c : create 创建     f : file  文件     v : verbose 显示压缩过程 可以省略次参数     tf: 查看压缩包里的文件     xf: 解压缩     -C: 指定解压的目录扩展:  --exclude=file 排除文件  --exclude-from=file # 排除文件中的文件 写个文档，然后把排除文件后缀加进去，GitHub那种直接背：压缩： tar -zcf /backup/logs_$(date +%Y%m%d).tar.gz /var/log/解压： tar -xf logs_20260615.tar.gz -C /tmp/restore/ # 解压到指定目录（比如迁移数据）# 注意: 系统为了保护系统文件，默认会将/移除，建议在打包压缩时候，尽量到相对路径进行打包[root@db01 etc]# tar zcvf /root/hosts.tar.gz hosts passwd---------------------------------------------------------------------zip命令：# yum -y install zip语法格式:1.打包    [root@db01 ~]# zip all.zip *.txt2.解压    root@db01 opt]# unzip all.zip3.指定解压的位置    [root@db01 opt]# unzip all.zip -d /tmp/    [root@db01 ~]# zip all.zip *.txt # 需要安装zip命令
+
+3.8. 软连接和硬链接注意: 创建软硬链接的时候都使用绝对路径    源地址→目标地址
+创建一个硬链接:[root@db01 ~]# ln a.txt hard.txt硬链接特点: # 使用相对较少1.具有相同Inode号码的文件互为硬链接2.删除一个硬链接不影响其他文件3.所有的inode号码都没了，则文件被删除4.创建硬链接直接使用ln5.目录不能创建硬链接，只有文件才可以创建硬链接6.硬链接不能跨文件系统，软链接可以跨文件系统(跨磁盘)7.目录默认2个硬链接，文件1个硬链接------------------------------------------------------------------------------------创建软链接：[root@db01 ~]# ln -s a.txt b.txt软链接特点:1.软链接的inode号码不同2.类似windows快捷方式3.软链接可以跨文件系统4.创建软链接 ln -s5.删除源文件，链接文件失效，变红底白字6.删除链接链接文件，不影响源文件7.目录可以做软链接软链接作用:1.保持文件路径不变，解决磁盘不够用的问题2.代码上线3.去软件版本号
+
+3.9. inode号码查询快速查单个文件 / 目录 inode：ls -i 文件名/目录名  # 只显示inode号ls -li 文件名       # 显示inode+详细权限信息查完整 inode 元数据（排错专用）：stat 文件名/目录名根据 inode 号反向找文件（唯一方法）：find 搜索路径 -inum inode号码实际引用场景：1.删除特殊文件名的文件（最常用）：文件名带-开头、空格、中文乱码、不可见字符时，rm命令会解析失败ls -i  # 找到该文件的inode号（比如123456）find . -inum 123456 -delete  # 安全删除，完全不受文件名影响2.排查 inode 耗尽故障：df -h显示磁盘还有大量空间，但无法创建新文件，报错No space left on device确认 inode 耗尽：df -i（看 IUse% 是否 100%）定位小文件最多的目录：find /data -type f | cut -d/ -f3 | sort | uniq -c | sort -nr | head -10批量删除或归档这些小文件（通常是日志、缓存、临时文件）3.解决 删文件磁盘空间不释放 问题：删除了几个 G 的大文件，df -h显示空间没变找到被删除但仍被占用的文件：lsof | grep deleted（输出中会显示 inode 号）找到对应的进程 PID，重启或杀掉进程释放空间
+
+3.10. 常用命令总结cd命令：./	代表你当前所在的目录（大部分时候可以省略，cd ./test 和 cd test 完全等价）../	代表当前目录的上一级目录~	代表当前用户的家目录 cd 或者cd ~ ：直接切换到当前用户的家目录cd - : 返回上次所在目录cd ..: 返回上一级目录cd / : 返回系统总目录/-----------------------------------------------------------------------ls命令：    -l  # 长格式显示文件详细信息| ll 相当于执行了 ls -l命令,相当于简称    -a  # 显示隐藏的文件或目录 all所有     -t：# 按文件修改时间倒序排列|运维中常用于查找最近修改的配置文件、最新生成的日志    -d：# 仅显示目录本身，不列出目录内的内容    -R：# 递归显示所有子目录的内容    -r：# ls 默认按字母升序排列文件 / 目录，添加 -r 后会反转当前的排序结果    -i: # -i 是 ls 的索引节点显示参数，执行后会在每个文件 / 目录名称左侧，显示其对应的 inode 号码    应用场景：-l：一般关注时间戳、权限-lt：按修改时间倒序排列，最新改动的文件在最前面，看权限和时间-ltr：按修改时间正序，最旧的在前面（常配合 tail 查看最早的文件）-la：显示所有文件，包括隐藏文件（.htaccess、.env 等）   -lhS：看空间占用-Al：看是否有隐藏文件-liZ：看 inode 和 SELinux---------------------------------------------------------------------du命令：du -sh 目录：查单个目录 / 文件的总大小  直接显示，不要s就会单独把每个文件列出来	[root@web01 ~]#du -sh /etc					33M	/etcdu -sh *：查当前目录下所有子目录 + 文件的各自大小  同理：du -hdu -sh * | sort -h：当前目录按大小正序排列（快速定位大目录）du -h --max-depth=1 /data | sort -hr | head -10：查/data下一级目录，按大小倒序取前 10（逐层深入排查的标准写法）-x：只统计当前文件系统，不扫描挂载的 NFS、网盘、其他分区（根目录排查必加！du -h --max-depth=1 -x /，否则会卡死服务器）--exclude=/proc --exclude=/sys：排除虚拟文件系统，统计更准更快注意：# 1.du 统计的是实际占用磁盘空间，≠ls -l显示的文件大小（稀疏文件、硬链接会有差异）# 2.绝对禁止直接敲du -sh /，会遍历所有挂载点，导致服务器 IO 打满---------------------------------------------------------------------touch命令：touch   #创建普通文件 如果文件存在则只修改文件的时间 不会影响文件的内容语法结构:  touch 普通文件 # 在当前位置创建普通文件  touch file1 file2 filen    # 一次性创建多个文件  touch /etc/oldboy.txt      # 在指定的目录下创建oldboy.txt注意: 在目录下创建普通文件，目录必须存在的，不支持递归创建touch test/test1/test2/a.txt  # test/test1/test2 三个目录必须存在-----------------------------------------------------------------------mkdir命令：mkdir  # 创建目录 make directory语法结构:  mkdir 目录名称    # 创建单个目录  mkdir dir1 dir2  # 创建多个目录  mkdir /opt/目录名称 # 指定在某个目录下创建  -p  # 递归创建目录注意: 创建目录可以递归，创建文件不可以递归mkdir -p oldboy/test/a #在当前创建oldboy/test/atree   # 树型结构显示目录  -L 1  # 只显示1级目录 只能大写#yum -y install tree  必须可以连接外网  -----------------------------------------------------------------------cat命令：cat   # 查看文件的内容，合并多个文件    -n  # 显示行号 number语法结构:  cat 文件  cat /目录/文件  cat file1 file2# cat &gt; /usr/lib/systemd/system/tomcat.service &lt;&lt; &#x27;EOF&#x27;# ... 此处写内容 ...# EOF# 这是 Shell 里“就地生成文件”的一种写法，叫做 Here Document（此处文档）。# # cat &gt; 文件路径：把标准输入重定向写入到这个文件（覆盖写）。# &lt;&lt; &#x27;EOF&#x27;：Shell 读取从这里开始到独立一行 EOF 之间的所有内容，传给 cat。# &#x27;EOF&#x27; 带单引号：表示这个 Here Document 里面不进行变量替换、命令替换，原样写入。# 如果不加引号，Shell 会把 $PATH、$(hostname) 等解释掉，乱套。# 等价于手动用 vi 新建文件然后粘贴内容，但脚本化更方便，而且能保证内容不被变量干扰。zcat  =  把 .gz 压缩包的内容&quot;解压到屏幕上看&quot;，但不真的解开、不生成解压文件本质等价于  gunzip -c  或  gzip -dczcat access.log.1.gz | grep ERROR          # 直接管道过滤，绝不解压落盘zcat error.log-20250101.gz | less          # 分页看zcat *.gz | grep &quot;timeout&quot;                 # 一次看一堆压缩包-----------------------------------------------------------------------cp命令：# 假设 /data 里有：属主 mysql、权限 700、一个软链接 link -&gt; /etc/my.cnf、mtime 是去年cp -r  /data  /bak1     # 递归了，但：属主变成你、mtime 变成现在、软链接可能变实体文件cp -a  /data  /bak2     # 属主还是 mysql、mtime 还是去年、软链接还是软链接 ✅cp 复制文件：覆盖复制： cp oldboy.txt /opt/oldboy.txt原地复制备份： cp oldboy.txt oldboy.txt.bak复制并改名：cp /opt/oldboy.txt test.txt多文件复制： cp oldboy.txt test.txt /tmp/目录复制： cp -r oldboy /tmp/强制复制：\cp -r oldboy /tmp/-----------------------------------------------------------------------mv命令：mv 移动文件：移动.bak文件到/tmp目录下：mv oldboy.txt.bak /tmp/移动多个文件到/tmp目录下：mv oldboy.txt test.txt /tmp/强制覆盖不提示：\mv oldboy.txt /tmp/移动目录：mv oldboy/ /tmp/# 注意：在企业中使用mv代替rm，相当于先放到回收站但是不清空---------------------------------------------------------------------rm命令：rm 删除文件：    -f 强制删除文件不提示    -rf 强制删除目录不提示 # 实际生产环境禁用rm：# 1. 建一个&quot;回收站&quot;（每台服务器初始化时就要建好）mkdir -p /data/.trash/$(date +%Y%m%d)# 2. &quot;删除&quot;文件 = 移过去（而不是 rm）mv /etc/nginx/nginx.conf /data/.trash/$(date +%Y%m%d)/# 3. 想恢复？移回来就行mv /data/.trash/20260722/nginx.conf /etc/nginx/nginx.conf# 4. 回收站里的东西，由定时任务自动清理（比如保留7天）# crontab 里加：0 3 * * * find /data/.trash -mtime +7 -exec rm -rf &#123;&#125; + 2&gt;/dev/null
+
+
+4. 网络管理4.1. 网卡配置1.cat /etc/resolv.conf	# 查看本机 DNS 配置2.cat /etc/hosts	# 查看本机 hosts 解析3.文件位置: /etc/sysconfig/network-scripts/ifcfg-eth0 #配置完要重启：systemctl restart network# TYPE=Ethernet     # 网络类型 以太网# BOOTPROTO=none    # 配置IP地址的方式 dhcp(自动获取IP地址 家里 教室笔记本)				  # 服务器IP地址都是固定IP =none =static# NAME=eth0         # 网卡在系统中显示的名称# UUID=038dc16d-4010-4d57-b8e4-8f33520504db # 类似身份证号 每个硬件设备都有一个唯一的编号 删除此条配置# DEVICE=eth0       # 硬件的名称# ONBOOT=yes        # 开机自动运行network服务# IPADDR=10.0.0.200 # IP地址 逻辑地址 局域网内唯一 虚拟机和虚拟机不能相同# PREFIX=24         # 子网掩码 24 决定了局域网内可以用的IP地址数量 10.0.0.1 - 10.0.0.254				      # 10.0.0.1配置给了vmnet8 10.0.0.2配置给了网关# GATEWAY=10.0.0.2  # 网关 去往不同网段的必经之路 去互联网的必经之路(局域网|公网)# DNS1=223.5.5.5    # DNS域名解析服务器 			      # 公用的DNS服务器地址 223.5.5.5 阿里云                  # 114.114.114.114 电信 8.8.8.8 谷歌  202.106.0.20 联通
+
+4.2. SSH配置1.ssh的安装：安装openssh-server：apt install openssh-server -y启动SSH服务，并设置开机自启：    systemctl start ssh    systemctl enable ssh验证SSH服务状态：systemctl status ssh验证SSH端口：netstat -tulnp | grep ssh  # 或 ss -tulnp | grep ssh2.ssh配置修改：# 编辑配置文件（vi/vim 为企业必备编辑器）vi /etc/ssh/sshd_config# 1. 允许密码登录（测试阶段保留，生产环境推荐改为密钥登录，设置为 no）PasswordAuthentication yes# 2. 禁止root用户直接登录（生产环境必备，提升安全性，测试阶段可保留 yes）PermitRootLogin yes# 3. 允许SSH连接的端口（默认22，生产环境改为非默认端口，如2222，避免暴力破解）Port 22# 4. 允许SSH服务监听所有网卡（默认开启，确保外部能连接）ListenAddress 0.0.0.0# 5. 连接超时时间（生产环境推荐，避免无效连接占用资源）ClientAliveInterval 60ClientAliveCountMax 3重启服务：systemctl restart sshd有时候要把防火墙关了，企业肯定是开着的# 1. 开放22端口（永久生效）firewall-cmd --permanent --add-port=22/tcp# 2. 重载防火墙配置（使规则生效）firewall-cmd --reload# 3. 验证端口是否开放firewall-cmd --query-port=22/tcp3. ssh连接-用密钥：测试环境直接用ip+用户连接，实际中必用密钥：整个逻辑：    1. Xshell 中，点击「工具」→「新建用户密钥生成向导」，默认参数（RSA，2048 位），点击「下一步」。    2. 设置密钥注释（自定义）和密码（可选，提升私钥安全性），点击「下一步」。    3. 保存公钥和私钥（本地电脑，如 C:\Users\你的用户名\Documents\SSH密钥），点击「完成」。    4. 上传公钥到服务器（以 root 用户为例，双版本通用）生成密钥：ssh-keygen# 1. 进入root用户的.ssh目录（无则创建，权限必须700，企业规范）mkdir -p /root/.ssh &amp;&amp; chmod 700 /root/.ssh# 2. 编辑authorized_keys文件（存放公钥，权限必须600，企业规范）vi /root/.ssh/authorized_keys# 3. 粘贴Xshell生成的公钥内容（全选公钥文件内容，复制粘贴到该文件）# 4. 保存退出，修改文件权限chmod 600 /root/.ssh/authorized_keys# 5. 重启SSH服务（使配置生效）# CentOSsystemctl restart sshd# Ubuntusystemctl restart ssh对ssh密钥的总结：1.针对当前用户，而非主机存放地址：/home/你的用户名/.ssh/          # Linux/Users/你的用户名/.ssh/           # macOS2.生成密钥：生成后会有2 个文件，一个是「公钥」，一个是「私钥」，这是 SSH 密钥对的核心：id_rsa	私钥	相当于你家门的钥匙，证明你是你	绝对不能！ 泄露了别人就能冒充你id_rsa.pub	公钥	相当于你家门上的锁，给服务器 / 平台装上去	随便给！ 贴在网上都没事核心逻辑：把「公钥」放到 GitLab 服务器上，「私钥」留在你电脑上，以后 Git 推拉代码就不用输密码了
+
+
+[!note] SSH优化
+
+SSH服务: 能够让我们使用远程连接工具远程连接服务器，默认开启优化远程连接的速度/etc/ssh/sshd_config   ## 配置文件的位置第一步: 修改配置文件[root@db01 ~]# grep UseDNS /etc/ssh/sshd_config UseDNS no  # 在115行 将默认yes 修改为no第二步: 重启SSH服务[root@db01 ~]# systemctl restart sshd正向解析: 将域名解析成IP地址   www.baidu.com--&gt;ip地址  常用   正常来讲我们连接服务器 知道IP地址，直接连接即可   www.linuxnc.com 直接可以使用域名远程连接反向解析: 将IP地址解析成域名   10.0.0.200--&gt;对应的域名？ 不用[root@db01 ~]# curl cip.cc  # 可以查看公网IP地址的信息URL : http://www.cip.cc/221.218.209.249-----------------------------------------------------------------------字符集优化：作用: 可以让中文在Linux系统中正常显示常用的字符集两种:第一种: UTF-8   默认的字符集第二种: GBK    国标系统默认的字符集必须和远程连接工具xshell(CRT)一致查看系统的字符集:[root@db01 ~]# echo $LANGen_US.UTF-8语言.编码修改语言为中文: 临时修改[root@db01 ~]# LANG=&#x27;zh_CN.UTF-8&#x27;永久修改: 需要修改配置[root@db01 ~]# cat /etc/locale.confLANG=&quot;en_US.UTF-8&quot;
+
+4.3. DNS配置/etc/resolv.conf : 存放DNS配置的位置，DNS配置文件 配置后直接生效/etc/hosts:本地DNS解析(本地域名解析服务)[root@oldboyedu ~]# cat /etc/hosts127.0.0.1  localhost localhost.localdomain localhost4 localhost4.localdomain4::1     localhost localhost.localdomain localhost6 localhost6.localdomain610.0.0.1  www.sina.comvim /etc/resolv.confnameserver 223.5.5.5nameserver 114.114.114.114安装: nslookup命令[root@oldboyedu ~]# yum -y install bind-utils[root@oldboyedu ~]# nslookup www.baidu.comServer: 223.5.5.5Address: 223.5.5.5#53Non-authoritative answer:www.baidu.com canonical name = www.a.shifen.com.Name: www.a.shifen.comAddress: 110.242.68.4Name: www.a.shifen.comAddress: 110.242.68.3面试题：DNS配置文件是哪个？ /etc/resolv.conf网卡配置和resolv.conf关联:1.如果网卡中配置了DNS，重启系统网卡会覆盖resolv.conf2.如果网卡中不配置DNS，则不会覆盖resolv.conf-----------------------------------------------------------------------------访问域名的步骤流程:1）浏览器输入www.baidu.com2) 系统先查询本地系统的hosts文件中是否有www.baidu.com对应的IP地址 如果有，则返回给浏览器，浏览器和返回的IP地址建立连接，默认是没有的3) 浏览器会继续查找自己配置的DNS服务器(223.5.5.5),询问223.5.5.5是否有www.baidu.com对应的IP地址， 如果有则返回给浏览器4) 浏览器和百度服务器的IP地址建立连接简单来说就是，先查本地hosts（本地词典，这么理解 ），然后没有再去到指定的DNS服务器查询，一个是本地词典，一个记录远程DNS服务器。
+
+
+4.4. 防火墙管理4.4.1. 前置补充：Linux自带防火墙开关：systemctl stop firewalldsystemctl disable firewalld关闭NetworkManager：临时关闭（立即生效，重启后恢复）：sudo systemctl stop NetworkManager禁止开机自启（重启后不会自动运行）：sudo systemctl disable NetworkManager同时关闭并禁止开机自启：sudo systemctl disable --now NetworkManager验证服务状态：sudo systemctl status NetworkManager# 1. 开放22端口（永久生效）firewall-cmd --permanent --add-port=22/tcp# 2. 重载防火墙配置（使规则生效）firewall-cmd --reload# 3. 验证端口是否开放firewall-cmd --query-port=22/tcp
+
+4.4.2. IPtables防火墙4.4.2.1. 安装配置1.停止自带的firewalld，禁止开机启动[root@m01 ~]# systemctl stop firewalld[root@m01 ~]# systemctl disable  firewalld2.安装iptables服务[root@m01 ~]#yum install -y iptables-services3.加载对应的模块，临时[root@m01 ~]#modprobe ip_tables[root@m01 ~]#modprobe iptable_filter[root@m01 ~]#modprobe iptable_nat[root@m01 ~]#modprobe ip_conntrack[root@m01 ~]#modprobe ip_conntrack_ftp[root@m01 ~]#modprobe ip_nat_ftp[root@m01 ~]#modprobe ipt_state永久的写入/etc/profile /etc/rc.localcat &gt;&gt;/etc/rc.local&lt;&lt;EOFmodprobe ip_tablesmodprobe iptable_filtermodprobe iptable_natmodprobe ip_conntrackmodprobe ip_conntrack_ftpmodprobe ip_nat_ftpmodprobe ipt_state EOF4.启动iptables并加入开机自启[root@m01 ~]#systemctl start iptables[root@m01 ~]#systemctl enable iptables
+
+4.4.2.2. iptables命令
+查看默认的防火强规则:[root@m01 ~]#iptables -nL2.清空默认的规则[root@m01 ~]#iptables -F[root@m01 ~]#iptables -X[root@m01 ~]#iptables -Z[root@m01 ~]#iptables -nLChain INPUT (policy ACCEPT)target   prot opt source        destination    Chain FORWARD (policy ACCEPT)target   prot opt source        destination    Chain OUTPUT (policy ACCEPT)target   prot opt source        destination 面试题: 你用过iptables吗？答: 用过那你跟我说一下 如果禁止某个IP地址怎么写？iptables -A INPUT -s ip地址 -j DROP案例1.禁止访问61的22端口[root@m01 ~]#iptables -I INPUT -p tcp --dport 22 -j DROP -------------------------------------------------------------------------------------案例2.删除规则进入到虚拟机中执行命令:[root@m01 ~]# iptables -I INPUT -s 10.0.0.1 -j ACCEPT[root@m01 ~]#iptables -nLChain INPUT (policy ACCEPT)target   prot opt source        destination    ACCEPT   all  --  10.0.0.1       0.0.0.0/0     DROP    tcp  --  0.0.0.0/0       0.0.0.0/0      tcp dpt:22Chain FORWARD (policy ACCEPT)target   prot opt source        destination    Chain OUTPUT (policy ACCEPT)target   prot opt source        destination 删除规则方式两种:第一种序号删除查看编号信息:[root@m01 ~]#iptables -nL --lineChain INPUT (policy ACCEPT)num target   prot opt source        destination    1  ACCEPT   all  --  10.0.0.1       0.0.0.0/0     2  DROP    tcp  --  0.0.0.0/0       0.0.0.0/0      tcp dpt:22删除INPUT链的第2条规则[root@m01 ~]#iptables -D INPUT 2[root@m01 ~]#iptables -nLChain INPUT (policy ACCEPT)target   prot opt source        destination    ACCEPT   all  --  10.0.0.1       0.0.0.0/0 第二种删除方法: 将I 或者A 修改为D[root@m01 ~]#iptables -D INPUT -p tcp --dport 22 -j DROP[root@m01 ~]#iptables -nLChain INPUT (policy ACCEPT)target   prot opt source        destination    ACCEPT   all  --  10.0.0.1       0.0.0.0/0    -------------------------------------------------------------------------------------案例3.限制来源IP地址禁止10.0.0.7 访问10.0.0.61[root@m01 ~]#iptables -I INPUT -s 10.0.0.7 -j DROP-------------------------------------------------------------------------------------案例4.限制网段[root@m01 ~]#iptables -I INPUT -s 172.16.1.7/24 -j DROP[root@m01 ~]#iptables -nLChain INPUT (policy ACCEPT)target   prot opt source        destination    DROP    all  --  172.16.1.0/24     0.0.0.0/0 -------------------------------------------------------------------------------------案例5.限制80端口[root@m01 ~]#iptables -I INPUT -p tcp --dport 80 -j DROP -------------------------------------------------------------------------------------案例6.限制10.0.0.7不能访问61的80端口[root@m01 ~]#iptables -I INPUT -s 10.0.0.7 -p tcp --dport 80 -j DROP-------------------------------------------------------------------------------------案例7.对源IP进行取反除了10.0.0.1之前所有的IP地址都不能访问我的服务器(慎重使用)[root@m01 ~]#iptables -I INPUT ! -s 10.0.0.1 -j DROP-------------------------------------------------------------------------------------案例8.修改默认的规则1.配置先允许自己可以访问61[root@m01 ~]#iptables -I INPUT -s 10.0.0.1 -j ACCEPT2.修改默认规则为DROP[root@m01 ~]#iptables -P INPUT DROP[root@m01 ~]#[root@m01 ~]#iptables -nLChain INPUT (policy DROP)target   prot opt source        destination    ACCEPT   all  --  10.0.0.1       0.0.0.0/0 -------------------------------------------------------------------------------------案例9.多端口配置允许80和443端口[root@m01 ~]#iptables -I INPUT -p tcp -m multiport --dport 80,443 -j ACCEPT案例10.禁ping禁ping 禁tracert[root@m01 ~]#iptables -I INPUT -p icmp --icmp-type 8 -j DROP通过linux操作系统内核参数配置禁ping设置为1为禁ping设置为0开启ping[root@m01 ~]#echo 1 &gt;/proc/sys/net/ipv4/icmp_echo_ignore_all[root@m01 ~]#cat /proc/sys/net/ipv4/icmp_echo_ignore_all1[root@m01 ~]#echo 0 &gt;/proc/sys/net/ipv4/icmp_echo_ignore_all[root@m01 ~]#cat /proc/sys/net/ipv4/icmp_echo_ignore_all0案例10.iptables的保持与恢复iptables-save将当前的配置保持到/etc/sysconfig/iptables[root@m01 ~]#iptables-save恢复iptabales1.重启读取/etc/sysconfig/iptables 配置文件中的策略systemctl restart iptables2.使用命令恢复iptables-restore &lt;/etc/sysconfig/iptables
+
+案例11.使用iptables实现共享上网SNAT：源地址转换
+服务端设置：1.iptables设置SNAT将来源IP是172.16.1.0网段的流量，全都转换成10.0.0.61去访问外网[root@m01 ~]#iptables -t nat -A POSTROUTING -s 172.16.1.0/24  -j SNAT --to-source 10.0.0.612.配置内核转发(拥有路由器功能)[root@m01 ~]#echo &#x27;net.ipv4.ip_forward = 1&#x27; &gt;&gt; /etc/sysctl.conf3.刷新配置[root@m01 ~]#sysctl -pnet.ipv4.ip_forward = 1# 使用ADSL拨号的网络:# 注意事项: 公网ip不固定: iptables -t nat -A POSTROUTING -s 172.16.1.0/24 -j MASQUERADE客户端设置:配置网关: 172.16.1.61 保证重启resolv.conf里DNS[root@web01 ~]#cat /etc/sysconfig/network-scripts/ifcfg-eth1TYPE=EthernetBOOTPROTO=noneNAME=eth1DEVICE=eth1ONBOOT=yesIPADDR=172.16.1.7PREFIX=24GATEWAY=172.16.1.61DNS1=223.5.5.5重启生效:[root@web01 ~]#systemctl restart network
+
+案例12.IP地址映射DNAT 目标地址转换：
+配置IP地址端口映射:[root@m01 ~]#iptables -t nat -A PREROUTING  -d 10.0.0.61 -p tcp --dport 9000 -j DNAT --to-destination172.16.1.7:22
+
+
+
+
+
+4.4.3. 常用命令总结net-tools命令包: #慢慢不用了1.ifconfig 	# 查看所有网卡 IP 地址（最常用）2.route -n  # 查看路由表3.netstat -tulnp # 查看所有正在监听的端口（运维神器）ip命令：#查网卡用 #yum install net-tools -y1.查看网卡和IP地址：ip addr show eth0ip aip a | grep inet	# 只看网卡名称和IP（精简版）2.查看网关（路由表）： ip route3.等价于 ifconfig eth0 up/down → 启动/禁用网卡：ip link set eth0 upip link set eth0 down ss命令： # 查端口 服务用1.过滤查看某个端口是否在监听（比如 8080、9000、22）:ss -tulnp | grep 8080ss -tulnp | grep 90002.查看所有 ESTABLISHED 状态的 TCP 连接:[root@server ~]# ss -tn state established3.查看与特定目标端口的连接:[root@server ~]# ss -tn dst :804.显示网络统计摘要：[root@server ~]# ss -s5.查看所有网络连接： ss -a6.查看 TCP 连接：ss -t其他补充：1.查看端口被哪个进程占用： lsof -i :80802.查看本机内网 IP： hostname -I3.查看本机外网 IP（最常用）：curl ifconfig.me[root@db01 ~]# curl cip.ccIP : 221.218.209.249地址 : 中国 北京运营商 : 联通数据二 : 北京市海淀区 | 联通数据三 : 中国北京北京市 | 联通URL : http://www.cip.cc/221.218.209.2494.ping 测试通不通（Ctrl+C 停止）： ping baidu.com5.测试端口通不通（判断防火墙/服务是否可达）：telnet 10.0.0.203 9000curl 10.0.0.203:90006.解析域名对应 IP:nslookup baidu.com
+
+
+4.5. 补充：常用服务端口FTP - 数据端口：20传输层协议：TCP说明：文件传输协议，数据连接使用的端口。FTP - 控制端口：21传输层协议：TCP说明：文件传输协议，控制连接使用的端口。SSH（安全外壳协议）端口：22传输层协议：TCP说明：用于安全的远程登录。Telnet（远程终端协议）端口：23传输层协议：TCP说明：用于远程登录（不安全）。SMTP（简单邮件传输协议）端口：25传输层协议：TCP说明：用于发送邮件。DNS（域名系统）端口：53传输层协议：TCP/UDP说明：用于将域名解析为 IP 地址。DHCP - 服务器（动态主机配置协议 - 服务器端）端口：67传输层协议：UDP说明：动态主机配置协议服务器端口。DHCP - 客户端（动态主机配置协议 - 客户端）端口：68传输层协议：UDP说明：动态主机配置协议客户端端口。HTTP（超文本传输协议）端口：80传输层协议：TCP说明：用于网页浏览（不安全）。POP3（邮局协议版本 3）端口：110传输层协议：TCP说明：用于接收邮件。IMAP（互联网消息访问协议）端口：143传输层协议：TCP说明：用于接收邮件（保留在服务器）。HTTPS（安全的超文本传输协议）端口：443传输层协议：TCP说明：用于加密的网页访问。SMB（服务器消息块协议）端口：445传输层协议：TCP说明：用于文件共享（Windows 环境）。MSSQL（Microsoft SQL Server）端口：1433传输层协议：TCP说明：Microsoft SQL Server 数据库服务端端口。Oracle（Oracle 数据库）端口：1521传输层协议：TCP说明：Oracle 数据库服务监听端口。MySQL（MySQL 数据库）端口：3306传输层协议：TCP说明：MySQL 数据库服务端端口。RDP（远程桌面协议）端口：3389传输层协议：TCP说明：用于远程桌面连接。PostgreSQL（PostgreSQL 数据库）端口：5432传输层协议：TCP说明：PostgreSQL 数据库服务端端口。Redis（Redis 键值数据库）端口：6379传输层协议：TCP说明：Redis 键值数据库服务端端口。HTTP - Proxy（HTTP 代理）端口：8080传输层协议：TCP说明：常用于代理服务器或备用 HTTP 服务端口。
+
+
+
+
+
+5. 磁盘管理5.1. 基本概述接口：1.IDE   淘汰2.SCSI  淘汰3.SATA  笔记本 台式机 家用 企业内部测试使用4.SAS   企业标配5.PCI-E 企业标配
+
+5.1.1. 分区表格式对比：MBR vs GPT【MBR 硬盘布局 - 假设 500G 硬盘】┌─────────────────────────────────────────────────────────────┐│                  MBR (主引导记录)                          │  ← 这里存放分区表│      只允许写 4 条记录（即最多4个主分区）                  │└─────────────────────────────────────────────────────────────┘【情况A：如果只分3个区】┌──────────────┬──────────────┬──────────────────────────────┐│  主分区1     │  主分区2     │  主分区3                     │  ← 都是物理分区│  (物理分区)  │  (物理分区)  │  (物理分区)                   ││  /dev/sda1   │  /dev/sda2   │  /dev/sda3                   ││  100G        │  100G        │  300G                        │└──────────────┴──────────────┴──────────────────────────────┘【情况B：如果想分 5 个区（生产常见）】┌──────────┬──────────┬────────────────────────────────────────────┐│ 主分区1  │ 主分区2  │           【扩展分区】                      │  ← 扩展分区本身不能存数据│ (物理)   │ (物理)   │  ┌────────┬────────┬────────┬────────┐  │     它是一个&quot;容器&quot;│ /boot    │ /        │  │逻辑1   │逻辑2   │逻辑3   │逻辑4   │  ││ 1G       │ 50G      │  │(逻辑)  │(逻辑)  │(逻辑)  │(逻辑)  │  │  ← 逻辑分区是物理存在的│          │          │  │/var    │/tmp    │/data   │swap    │  │    数据就写在这里│          │          │  │ 50G    │ 10G    │ 300G   │ 8G     │  │└──────────┴──────────┴──┴────────┴────────┴────────┴────────┘  ┘在 MBR 下，物理分区 = 主分区 + 扩展分区。逻辑分区不是物理存在的磁盘段，它是在“扩展分区”这个框框里再划分的逻辑地址。你在 Linux 里看到的 /dev/sda5（数字从5开始），100%是逻辑分区（因为1-4留给了主分区）。
+
+【GPT 硬盘布局 - 假设 4TB 硬盘】┌──────────────┐│  GPT头 + CRC │  ← 分区表头（带校验）├──────────────┤│  分区1 (主)   │  ← /dev/sdb1 ( /boot )  全是物理分区（主分区）├──────────────┤│  分区2 (主)   │  ← /dev/sdb2 ( / )├──────────────┤│  分区3 (主)   │  ← /dev/sdb3 ( /var )├──────────────┤│  分区4 (主)   │  ← /dev/sdb4 ( /data )├──────────────┤│  分区5 (主)   │  ← /dev/sdb5 ( /tmp )  【没有逻辑一说，全是主分区】├──────────────┤│  ......       │  ← 想建100个分区都行，全是主分区├──────────────┤│ 备份 GPT头    │  ← 硬盘尾部存了一份一模一样的分区表（自动备份）└──────────────┘结论：GPT 下只有主分区（物理分区），没有逻辑分区这个概念。所以你用 parted 或 gdisk 分区时，根本不会问你是 p(主) 还是 e(扩展)，直接一路回车就行。
+
+Q1：有一块 3TB 的新盘，你用 fdisk /dev/sdb 分区发现只有 2.2TB 可用，为什么？答：因为 fdisk 默认创建 MBR 分区表，最大只认 2.2TB。解决办法：改用 parted /dev/sdb mklabel gpt 切换为 GPT 分区表。Q2：生产上，系统盘（/boot）建议用 MBR 还是 GPT？答：这取决于 BIOS 启动模式。如果是旧物理机 BIOS 传统模式，必须用 MBR（且 /boot 必须放在 2.2T 的前端）。如果是云服务器或新 UEFI 机器，强制建议用 GPT（更健壮，支持大容量）。Q3：“物理分区”和“逻辑分区”在性能上有区别吗？答：几乎没有性能差异！逻辑分区只是地址映射多了一层，在底层读写时都直接对应硬盘扇区，性能损耗不足 1%，可以忽略不计。逻辑分区唯一的缺点是：如果扩展分区表损坏，里面所有逻辑分区数据全丢；而 GPT 每个分区独立，互不影响。Q4：LVM 和 逻辑分区 是一回事吗？答：大错特错！ 逻辑分区是 MBR 硬盘层面的概念（为了解决4个主分区限制）。LVM 是 内核层面的卷管理工具。两者互不冲突——你完全可以在 MBR 的逻辑分区（/dev/sda5）上创建 LVM 的 PV。“MBR 老古董，只能分 4 主，超 2T 认不出；想分 5 个盘，必须破例划扩展，里面套逻辑。GPT 新潮流，破 2T 无上限，128 个全是主，头尾双备份，数据稳如狗。大容量盘上 parted，小盘用 fdisk，生产挂载不用愁。”
+
+5.1.2. 磁盘结构挂载说明sda               8:0    0   20G  0 disk      ← 第1块物理盘（系统盘，20G）├─sda1            8:1    0    1G  0 part /boot└─sda2            8:2    0   19G  0 part   ├─centos-root 253:0    0   17G  0 lvm  /    ← 根目录  └─centos-swap 253:1    0    2G  0 lvm  [SWAP]sdb               8:16   0   10G  0 disk      ← 第2块物理盘（数据盘，10G）└─sdb1            8:17   0   10G  0 part /data1. 第一块盘 sda（系统盘）—— 典型的 LVM 结构sda1（1G）挂载 /boot：这是引导分区，存放内核和 grub 引导文件。生产注意：只有 1G 很容易被写满（因为内核更新会残留旧内核）。面试经典建议：定期执行 yum autoremove kernel 或 package-cleanup --oldkernels --count=2 清理旧内核。sda2（19G）：它本身不是文件系统，而是 LVM 物理卷（PV）。它下面缩进的 centos-root 和 centos-swap 才是逻辑卷（LV）。说明安装系统时选了“使用 LVM”的默认分区方案。2. 逻辑卷的分配（根目录和虚拟内存）centos-root（17G）挂载 /：系统根目录只有 17G。这是个大坑！如果 /var/log 没单独分，日志写个几 GB，根分区马上就满了（Linux 根分区满会导致系统卡死甚至无法登录）。centos-swap（2G）挂载 [SWAP]：Swap 只有 2G。如果这是台物理机跑 Java 应用（如 Tomcat），内存稍大一点，2G Swap 根本不够用。生产建议：现在内存普遍 32G+，Swap 给 4G~8G 比较合理（或者直接用我们之前说的 swapfile 方式扩容）。3. 第二块盘 sdb（数据盘）—— 你刚刚救回来的盘sdb1（10G）挂载 /data：这是你之前用 fdisk 分区、mkfs.ext4 格式化，并最终修好 /etc/fstab 挂载上的那块盘。注意看：它的 TYPE 是 part（普通分区），不是 lvm。生产隐患：如果以后 /data 空间不够（10G 很容易满），你没法在线扩容（因为不是 LVM，且盘后端没有剩余空间）。到时候只能停服务、换大硬盘、拷数据。这也是我强烈建议数据盘用 LVM 的原因。4. sr0（光驱）这是虚拟光驱，挂载了 ISO 镜像（1024M），一般不用管它。
+
+
+5.2. RAID需求: 1.2T 数据文件 wtl.avi900G*8块做RAID逻辑的将多个盘组合成一个盘:900G*2=1.8T需求: 400G wtl.avi 放在了一块盘900*8块做RAID逻辑的将两个盘合成1个盘 1个盘用来存放数据 另外一个块备份数据900G*2=900G
+
+笔试题:写出RADI0 RADI1 RAID5 RAID10的区别:
+5.3. 磁盘常用操作
+5.3.1. 磁盘初始化1.MBR格式最多支持4个主分区：C D E F2.MBR格式支持3个主分区+1个扩展分区3.基于扩展分区划分逻辑分区：只有主分区和逻辑分区才可以正常写入数据
+分区命令: 面试题 笔试题对大于2T的磁盘使用parted分区 GPT格式 128个主分区对小于2T的磁盘使用fdisk分区 MBR格式 4个主分区
+1.系统识别磁盘：# 查看所有块设备（包括未分区、未挂载的）lsblk 或 fdisk -l# 举例说明:NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTsda      8:0    0   40G  0 disk├─sda1   8:1    0    1G  0 part /boot└─sda2   8:2    0   39G  0 part /sdb      8:16   0  100G  0 disk            # 这就是新盘，还没有任何分区2.分区：- 整个盘作为一个分区（简单，适合大多数应用）- 不分区，直接在裸设备上建文件系统（比如用于数据库的 LVM 或直接格式化 /dev/sdb）生产实践：一般建议分区 + 使用 LVM，这样未来可以动态扩容，避免磁盘满了换盘痛苦。但为了快速上手，这里先讲单分区（不用 LVM），等会儿我再补充 LVM 的优势。fdisk /dev/sdb交互步骤（可以记住）：输入 n 新建分区选择分区类型：p 主分区（默认）分区号：1（回车）起始扇区：直接回车（默认）结束扇区：直接回车（使用全部空间）输入 w 写入分区表并退出完成后，分区设备为 /dev/sdb1。确认：lsblk # 应该看到 sdb1 了  分区的高级选择：如果你未来可能需要扩容，强烈建议使用 parted 创建 GPT 分区表（支持大于2TB盘 + 更多主分区）：parted /dev/sdb mklabel gptparted /dev/sdb mkpart primary 0% 100%# 或者用 mkpart 指定起始和结束3.格式化：ext4：最通用，性能稳定，适合大多数业务（日志、web、非数据库海量小文件）xfs：性能好，支持大文件，CentOS 7+ 默认，推荐用于数据盘（但注意缩小容量极难）btrfs：高级功能，生产用得少。# 格式化为 ext4mkfs.ext4 /dev/sdb1# 格式化为 xfs（需要安装 xfsprogs，一般已装）mkfs.xfs /dev/sdb14.挂载：# 核心：一切皆文件，创建一个目录，然后让磁盘挂载到目录，相比win多了一步# 习惯将外部数据盘挂载到 /data 或 /opt/data 等mkdir -p /data# 临时挂载mount /dev/sdb1 /data# 验证挂载df -h /data# 或mount | grep /data5.持久化配置：获取UUID：blkid /dev/sdb1# 输出类似：/dev/sdb1: UUID=&quot;a1b2c3d4-...&quot; TYPE=&quot;ext4&quot;写入 /etc/fstab：#最好手动vim 对齐格式cp /etc/fstab /etc/fstab.bakecho &quot;UUID=a1b2c3d4-xxxx  /data  ext4  defaults  0  2&quot; &gt;&gt; /etc/fstab第1列：UUID 或设备第2列：挂载点第3列：文件系统类型第4列：挂载参数（defaults 包含 rw, suid, dev, exec, auto, nouser, async）第5列：dump 备份（0 不备份）第6列：fsck 检查顺序（根分区为1，其他为2，不检查为0）6.验证：# 卸载刚挂载的 /dataumount /data# 使用 mount -a 尝试挂载所有 fstab 中的条目mount -a# 检查是否成功挂载df -h /data7.设置权限：# 假设你的应用以 www 用户运行chown -R www:www /datachmod 755 /data
+
+
+5.3.2. 使用LVM管理硬盘直接分区 + 格式化虽然简单，但如果以后磁盘空间不够，再扩容就很麻烦（只能换更大盘，数据迁移）。LVM 允许你在不停止服务的情况下动态扩容。层级	L                  VM 术语	      大白话解释	                                                        对应你之前的操作第1层	                PV (物理卷)	  就是你手上的乐高砖块（物理硬盘 &#x2F;dev&#x2F;sdb）	就是你的 &#x2F;dev&#x2F;sdb 整块盘第2层	                VG (卷组)	  你的大收纳箱，把一堆砖块扔进去合并容量	        相当于把100G + 200G 合并成300G的池子第3层	                LV (逻辑卷)	  你从收纳箱里切出来的一块具体积木（最终使用的设备）	相当于你之前的 &#x2F;dev&#x2F;sdb1，但它是弹性的
+5.3.2.1. LVM初始化操作# 1. 创建物理卷 PV（把砖块擦干净，打上标记）pvcreate /dev/sdb# 系统会提示成功，你可以用 pvs 或 pvdisplay 查看# 2. 创建卷组 VG（把砖块扔进收纳箱，起名叫 data_vg）vgcreate data_vg /dev/sdb# 成功后，你可以用 vgs 查看卷组大小# 3. 创建逻辑卷 LV（从收纳箱里切 100G 出来，起名叫 data_lv）lvcreate -L 100G -n data_lv data_vg# 如果想用完所有空间，用：lvcreate -l 100%FREE -n data_lv data_vg此时你的逻辑卷设备路径为：/dev/data_vg/data_lv 或 /dev/mapper/data_vg-data_lv接下来格式化并挂载，注意这里再也不写 /dev/sdb1 了，而是写 LV 路径：# 格式化（跟之前一样）mkfs.ext4 /dev/data_vg/data_lv# 挂载mount /dev/data_vg/data_lv /data# 写入 /etc/fstab（这里推荐写 UUID，或者直接写 /dev/mapper/data_vg-data_lv）echo &quot;/dev/mapper/data_vg-data_lv  /data  ext4  defaults  0  2&quot; &gt;&gt; /etc/fstab
+
+5.3.2.2. LVM动态扩容这是 LVM 最牛的地方。假设 &#x2F;data 只剩 10% 空间了，你又在云上买了一块 200G 的云盘 &#x2F;dev&#x2F;sdc，不用停机、不用卸载 &#x2F;data，在线给它扩到 300G。
+# 1. 物理层面：把新盘变成 PVpvcreate /dev/sdc# 2. 卷组层面：把新 PV 加入现有的 VG（收纳箱变大了）vgextend data_vg /dev/sdc# 3. 逻辑层面：把 VG 里多出来的空间全部分配给 LV（逻辑卷变大了）lvextend -l +100%FREE /dev/data_vg/data_lv# 4. 文件系统层面：让文件系统“感知”到变大了（关键！）# 如果是 ext4 文件系统：resize2fs /dev/data_vg/data_lv# 如果是 xfs 文件系统（CentOS 7+ 默认）：xfs_growfs /data   # 注意 xfs 是挂载点，不是设备名！结果：你在 /data 目录下 df -h 一看，瞬间变成 300G，中间没有任何服务中断！
+
+5.3.3. swap扩容
+在系统中创建swap分区:[root@db01 ~]# free -h      total    used    free   shared buff/cache  availableMem:      1.9G    169M     1.7G     9.5M    101M     1.6GSwap:      2.0G     0B     2.0G# 1. 生成一个 4G 的空文件（bs=1M count=4096）dd if=/dev/zero of=/swapfile bs=1M count=4096 status=progress# 2. 修改权限（必须 600，否则系统报错“不安全”）chmod 600 /swapfile# 3. 格式化为 swap 格式mkswap /swapfile# 4. 启用swapon /swapfile# 5. 写入 /etc/fstab 永久生效（开机自动挂载）echo &quot;/swapfile swap swap defaults 0 0&quot; &gt;&gt; /etc/fstab
+
+
+5.4. parted工具
+fdisk：老牌工具，只支持 MBR（虽然新版也支持GPT，但不稳定）。它交互式操作，适合新手。
+parted：全能型分区工具，同时支持 MBR 和 GPT，并且支持大于 2TB 的盘。它是生产环境操作大容量磁盘（&gt;2T）的唯一官方推荐工具。
+
+# 1. 交互式创建 GPT 分区（最简单）parted /dev/sdb(parted) mklabel gpt      # 设置分区表为 GPT（擦除所有数据！）(parted) mkpart primary 0% 100%   # 创建一个从0到100%的主分区(parted) quit# 2. 非交互式（脚本化，云上批量装机必用）parted /dev/sdc mklabel gptparted /dev/sdc mkpart primary 0% 100%# 3. 查看现有分区表类型（不知道是MBR还是GPT用这个）parted /dev/sda print | grep &quot;Partition Table&quot;# 输出：Partition Table: msdos  (代表MBR)# 输出：Partition Table: gpt    (代表GPT)
+
+
+5.5. 常用命令总结1.查看磁盘分区表类型（MBR 还是 GPT）：fdisk -l /dev/sda	输出开头显示 Disklabel type: gpt 或 Disklabel type: dos（dos=MBR）	最常用、最快。注意：如果是大于2T的盘，fdisk 可能不兼容，建议用 parted。parted /dev/sda print	输出显示 Partition Table: gpt 或 Partition Table: msdos	绝对准确，支持所有类型和大小的盘。生产环境脚本化检查推荐用这个。gdisk -l /dev/sda	如果显示 MBR: MBR only 则是 MBR；如果显示 GPT: present 则是 GPT	gdisk 是专门操作 GPT 的工具，如果没有 gdisk 命令，yum install gdisk 安装。2.查看磁盘分区结构：lsblk	lsblk -f（看文件系统+UUID）	lsblk -m（看权限和所有者）看分区表格式 + 分区信息: parted -l3.查看磁盘UUID：blkid		blkid /dev/sdb14.详细分区表：fdisk -l（列出所有盘）或 fdisk -l /dev/sdb5.磁盘利用率：df：	df -h（人类可读）	df -i（查看 inode 使用率）	du -sh *：	du -sh /var/*（只看一级目录总和）	du -sh /data（看整个目录总大小）	6.磁盘性能排查（定位“慢”的根源）iostat -x 1 5（每秒刷新，显示5次）	# 查看磁盘 %util（磁盘繁忙度）。如果 %util 接近 100%，说明磁盘 IO 已饱和，应用慢是因为磁盘扛不住了（常见于数据库服务器）。需要安装 sysstat 包。iotop -o（只显示有 IO 的进程）	    # 实时看 哪个进程 在疯狂读写磁盘。生产上发现磁盘 IO 高，用这个命令立刻能揪出是 MySQL 在刷盘还是日志进程在写。需要安装 iotop 包。7.文件系统修复与块操作（救命命令）xfs_repair /dev/sdb1（必须卸载后执行）	# XFS 文件系统修复工具。生产铁律：修复前必须 umount，且强烈建议先备份数据！fsck.ext4 -f /dev/sdb1（强制检查）	# Ext4 文件系统检查修复。同样必须卸载分区后再执行。dd if=/dev/zero of=/swapfile bs=1M count=4096	# 磁盘级拷贝/生成文件。生产常用：创建 Swap 文件、备份 MBR 分区表（dd if=/dev/sda of=mbr.bak bs=512 count=1）、磁盘测速（dd if=/dev/zero of=test bs=64k count=10000 conv=fdatasync）。
+
+磁盘信息查看：
+1.怎么看有几块物理磁盘：fdisk -l 输出中，每一行以「磁盘 /dev/sdX:」开头，就代表一块物理磁盘。# 磁盘 /dev/sda: 21.5 GB → 第 1 块物理盘，容量 21.5G（系统盘）# 磁盘 /dev/sdb: 17.2 GB → 第 2 块物理盘，容量 17.2G（数据盘）# 后面 /dev/mapper/xxx 开头的不是物理磁盘，是 LVM 逻辑卷（逻辑盘），不属于物理硬件。2.怎么看每个磁盘有几个分区:每块物理磁盘的信息下方，会有一个分区表格，表头是：设备 Boot Start End Blocks Id System# 所以 /dev/sda 一共 2 个分区。# 而 /dev/sdb 下面没有这个分区表格，说明：# 这块磁盘没有做分区，你是把整块磁盘直接做成了 LVM 物理卷（对应第二张图最后的 data_vg-data_lv 逻辑卷）。3.怎么看磁盘格式（分区表类型）:dos = MBR 分区表（老式分区表，最大支持 2TB 单盘，最多 4 个主分区）gpt = GPT 分区表（新式分区表，支持大磁盘、更多分区）
+
+
+6. 工具补充总结6.1. vim使用ctrl+c   # 强制结束当前的操作ctrl+l   # 清屏ctrl+u   # 剪切光标所在到行首ctrl+y   # 粘贴剪切的内容ctrl+a   # 快速移动光标到行首 Homectrl+e   # 快速移动光标到行尾 Endctrl+← → # 移动一个单词ctrl+v 	 # 块模式 批量选中shift+v	 # 批量选择行-----------------------------------------------------------------------------语法结构:  严格区分大小写1.移动光标:h j k l：左、下、上、右gg：到文件首行G：到文件末行 注意大小写：10G 快速到第10行0：到行首（最左边）^：到行首第一个非空字符$：到行尾w：跳到下一个单词开头b：跳到上一个单词开头2. 选中内容（可视化模式）v：字符选择V：行选择Ctrl+v：块选择（竖选）选中后：y复制 / d删除 / x剪切3. 复制、粘贴、删除复制:# yy：复制整行# yw：复制一个单词# y$：复制到行尾剪切：# dd  快速剪切光标所在的行# 3dd 快速剪切光标往下3行粘贴：# p：粘贴到光标后  3p 快速粘贴3行内容# P：粘贴到光标前删除：# d+End 快速删除光标所在到行尾# d+G  快速删除光标所在到文件的末尾# D   删除光标所在到行尾# d+0 d+Home d+^ 快速删除光标所在到行首,最后一个字符保留，就光标那个字符# dw  删除单词# dd：删除整行# D = d$：删除到行尾# d^：删除到行首非空# x：删除光标所在字符# X：删除光标前一个字符3. 撤销、恢复# u：撤销# Ctrl+r：重做（恢复撤销）5.搜索： / 搜索内容   # 直接词组搜就行/\&lt;mysql\&gt;  # 单词匹配：仅匹配完整单词 &quot;mysql&quot;，不匹配 &quot;mysqladmin&quot;/&quot;mysqld&quot;/error\c    # 小写c,忽略大小写：搜索 &quot;error&quot;/&quot;Error&quot;/&quot;ERROR&quot; 等，忽略大小写/ERROR\C    # 小写c,大小写：仅匹配大写 &quot;ERROR&quot;，区分大小写转义字符搜索：/\./        # 搜索小数点 &quot;.&quot;（默认 . 是匹配任意字符）/\*         # 搜索星号 &quot;*&quot;/\/data     # 搜索 &quot;/data&quot;（/ 需转义）查出来之后：n（小写）	跳转到下一个匹配项N（大写）	跳转到上一个匹配项gg + n	从文件开头开始搜索6.替换::s/旧内容/新内容/	    仅光标所在行	替换第一个匹配项:s/旧内容/新内容/g	仅光标所在行	替换所有匹配项（g=global）:%s/旧内容/新内容/g	整个文件	    替换所有行的所有匹配项（%= 整个文件）:s/旧内容//g	        仅光标所在行	删除该行所有旧内容（新内容为空）:%s/旧内容//g	    整个文件	    删除文件中所有旧内容7.技巧补充：全选：ggVG	gg：跳到文件第一行	V：进入行可视化模式	G：跳到文件最后一行选中后常用操作：y：复制全部d：删除全部全删：gg dG 或者 :%d   回车: 再输入 w 文件名：另存为&gt;&gt;：向右缩进&lt;&lt;：向左缩进Ctrl+u：向上翻半屏Ctrl+d：向下翻半屏gg=G：自动格式化全部代码8.模式选项：进入编辑模式: i ao  在光标所在的下一行进入编辑模式0  在光标所在的上一行进入编辑模式C  删除光标所在到行尾并进入编辑模式: 底行模式:wq 保存并退出:q！强制退出不保存:set nu 显示行号:set nonu 取消显示行号视图模式下: ZZ 保存并退出
+
+
+vim优化：修改&#x2F;etc&#x2F;vimrc文件 或者 ~&#x2F;.vimrc
+&quot; ========== 1. 基础显示 ==========set number              &quot; 永久显示行号（对应你每次敲的 set nu）set cursorline          &quot; 高亮当前所在行，眼睛好找位置set showcmd             &quot; 底部显示正在输入的命令set laststatus=2        &quot; 永远显示状态栏&quot; ========== 2. 缩进 &amp; Tab 统一（核心，解决跨平台对齐问题） ==========set tabstop=4           &quot; 一个 Tab 字符显示为 4 个空格的宽度set shiftwidth=4        &quot; 自动缩进（&gt;&gt;/&lt;&lt;）的步长为 4set softtabstop=4       &quot; 按退格键时，一次删除 4 个空格宽度set expandtab           &quot; 输入 Tab 自动替换成空格（跨平台不乱的核心）set autoindent          &quot; 换行自动继承上一行的缩进set smartindent         &quot; 智能缩进，写脚本/代码时遇到 &#123; 自动缩进&quot; ========== 3. 编辑体验优化 ==========set backspace=indent,eol,start  &quot; 退格键可以删缩进、换行、光标前内容set mouse=a             &quot; 终端里支持鼠标点击跳行、选文本set encoding=utf-8      &quot; 默认编码 UTF-8set fileencodings=utf-8,gbk,gb2312  &quot; 打开文件自动识别编码，解决中文乱码&quot; ========== 4. 搜索优化 ==========set hlsearch            &quot; 搜索结果高亮显示set incsearch           &quot; 输入关键词时实时匹配搜索set ignorecase          &quot; 搜索默认忽略大小写set smartcase           &quot; 关键词含大写字母时自动区分大小写&quot; ========== 5. 运维清爽设置 ==========set nobackup            &quot; 不生成 .bak 备份文件set noswapfile          &quot; 不生成 .swp 交换文件（异常退出不会留垃圾文件）set history=1000        &quot; 保留 1000 条命令历史
+
+
+6.2. 正则表达式6.2.1. 常用通配符$   取值、取变量!   取反、排除;   分割语句``  先执行其中命令，执行结果放在原地&#x27;&#x27;  当成单纯字符串输出&quot;&quot;  效果等同于不加，一样会解析出来*   所有&#123;&#125; [] 生成序列？ 任意一个字符&gt;:标准输出重定向，清零追加&gt;&gt;:标准输出 追加重定向2&gt; 2&gt;&gt; 同理&lt;：标准输入重定向,xargs,tr（替换字符）&lt;&lt;：标准输入追加重定向单引号，双引号，不加引号区别：echo &#x27;$LANG $(hostname) &#123;1..5&#125;&#x27; &#x27; &#x27; 单引号:所见即所得,吃啥吐啥 &quot; &quot; 双引号:具有特殊含义的符号 linux对特殊符号进行了解析 执行 不加引号:与使用双引号的时候相同，支持通配符 ` ` 反引号 $():运行里面的命令，把命令显示出来的东西留下了 
+
+6.2.2. 正则符号
+
+
+类型
+作用
+举例
+备注
+
+
+
+^
+以….开头的行
+grep ‘^m’ id.txt
+^以….开头的行  是整个词组的 ^123 ^[123] 注意区分匹配行首，awk 中，^则是匹配字符串的开始
+
+
+$
+查找以文件内以m结尾的行 m $ (中间是有空格的）
+grep ‘m $’ id.txt
+匹配行尾，awk 中，$则是匹配字符串的结尾
+
+
+^$
+表示空行 什么符号都没有
+grep ^$ id.txt -n #过滤到内容的行号
+
+
+
+.
+任意一个字符 不会匹配到空行 过滤任意的一个字符 直接显示所有字符
+grep . id.txt
+
+
+
+*
+前一个字符连续出现了0次或0次以上的字符串片段
+grep 6* id.txt
+6* 的字面含义：匹配「字符 6 出现 0 次、1 次、多次」的字符串片段。 因为 * 允许前面字符出现 0 次，所以 6* 会匹配任意位置的空字符串
+
+
+.*
+所有 任何符号 包含空行
+
+正则的贪婪匹配 .* 所有符号 任何符号 连续出现的字符 有多少匹配多少举例说明： 一般都是联合用grep ^.b id.txt贪婪匹配，不管前面匹配到什么，直到b截止grep c.$ id.txt c开头，任意结尾
+
+
+[]
+匹配包含在[字符]之中的任意一个字符
+
+
+
+
+[^]
+匹配[^字符]之外的任意一个字符
+
+
+
+
+[ - ]
+匹配[]中指定范围内的任意一个字符
+
+
+
+
+?
+匹配之前的项 1 次或者 0 次
+
+
+
+
++
+匹配之前的项 1 次或者多次
+
+
+
+
+*
+匹配之前的项 0 次或者多次, .*
+
+
+
+
+()
+匹配表达式，创建一个用于匹配的子串
+
+
+
+
+{n}
+匹配之前的项 n 次，n 是可以为 0 的正整数
+
+
+
+
+{n,}
+之前的项至少需要匹配 n 次
+
+
+
+
+{n,m}
+指定之前的项至少匹配 n 次，最多匹配 m 次，n&lt;&#x3D;m
+
+
+
+
+|
+交替匹配
+两边的任意一项 ab(c
+d)匹配 abc 或 abd
+
+
+&gt;[[:space:]]
+空格
+
+
+
+
+[[:digit:]]
+[0-9]
+
+
+
+
+[[:lower:]]
+[a-z]
+
+
+
+
+[[:upper:]]
+[A-Z]
+
+
+
+
+[[:alpha:]]
+[a-Z]
+
+
+
+
+
+
+
+
+
+
+
+[!note] 补充说明  
+
+[]：[abc] 相当于是一个符号 每次匹配1个字符 找出包含a或b或c 是单个字符查找 不是词组还有其他的，比如说：[A-Z] 、[a-z]等[a-zA-Z0-9]在在中括号里的符号 大部分没有特殊的含义  写什么找什么比如：grep &#x27;[.!]$&#x27; id.txt     #查找以. !和空格结尾的grep &#x27;[.!$]&#x27; id.txt     #查找.!$注意区分：  1.是单个字符还是词组开头[]括号可以让所有字符全部还原成本身字符意思，同\转义符一个意思：      grep &#x27;[abc]&#x27; id.txt 任意包含a或b或c      grep &#x27;abc&#x27; id.txt   abc开头的，是整个字符串  2.^ [^ ] [^abc] 取反 排除a 排除b 排除c  中括号默认不匹配空行      [^^abc] 只有第一个^生效，第二个默认为字符-------------------------------------------------------------------------&#123;&#125; ：第一种方法 &#123;n,m&#125;前一个字符至少连续出现n次 最多出现m次 范围  egrep &#x27;8&#123;1,3&#125;&#x27; id.txt第二种方法8&#123;3&#125; 最多显示多少次 最大值  egrep &#x27;8&#123;3&#125;&#x27; id.txt应用：过滤身份证egrep &#x27;[0-9]&#123;17&#125;[0-9X]&#123;1&#125;&#x27; id.txtegrep -w &#x27;[0-9]&#123;17&#125;[0-9X]&#123;1&#125;&#x27; id.txt #也行，精确匹配的方式-------------------------------------------------------------------------（） 表示一个整体  反向引用/后向引用egrep &#x27;lizhen(y|u)a&#x27; id.txt匹配过滤一个整体：要不是：inzhenya或者lizhenu
+
+6.2.3. 三剑客6.2.3.1. tr命令tr命令：对字符进行替换、删除、压缩重复字符，仅处理标准输入（stdin） ，无法直接操作文件，配合着用语法：tr [选项] 字符集1 字符集2	选项：		-d：删除字符集 1 中的所有字符；        -s：压缩字符集 1 中的重复字符（多个变一个）；        -c：匹配字符集 1 的补集（即「非字符集 1」的字符），常配合 -d/-s 使用。    字符集 1：待处理的字符（如 a-z、\r、[:space:]）；    字符集 2：目标字符（替换场景用，删除 / 压缩场景无需）；运用举例说明：1.替换日志分隔符（生产高频）：将 Nginx 日志中的逗号 , 替换为空格，便于 awk 按列提取字段cat /var/log/nginx/access.log | tr &#x27;,&#x27; &#x27; &#x27; &gt; /var/log/nginx/access_new.log2.统一字符大小写：将配置文件中的变量名转为大写（规范配置格式）cat /data/config.txt | tr [a-z] [A-Z] &gt; /data/config_upper.txt3.替换特殊符号：将日志中的 | 替换为 -，避免分隔符冲突cat /data/business.log | tr &#x27;|&#x27; &#x27;-&#x27; &gt; /data/business_clean.log4.删除 Windows 换行符 ^M（生产必用）：Windows 编辑的文本 / 日志传到 Linux 会有 \r（^M），导致命令执行异常，需删除# 删除script.sh中的\r字符（^M）cat /data/script.sh | tr -d &#x27;\r&#x27; &gt; /data/script_linux.sh删除日志中的空格 / 制表符：规整数据格式，便于统计# 删除data.txt中的所有空格cat /data/data.txt | tr -d &#x27; &#x27; &gt; /data/data_no_space.txt# 删除所有制表符（\t）cat /data/data.txt | tr -d &#x27;\t&#x27; &gt; /data/data_no_tab.txt删除特殊控制字符：清理日志中的不可见控制字符（如 ^H、^C）# 删除所有控制字符（\000-\037），保留正常字符cat /data/log.txt | tr -d &#x27;\000-\037&#x27; &gt; /data/log_clean.txt压缩多个空格为一个：处理用户输入的文本，避免多空格影响字段提取cat /data/input.txt | tr -s &#x27; &#x27; &gt; /data/input_clean.txt压缩多个空行为一个：清理日志中的大量空行，减少文件体积cat /data/log.txt | tr -s &#x27;\n&#x27; &gt; /data/log_compress.txt压缩重复分隔符：将日志中连续的 - 压缩为一个cat /data/log.txt | tr -s &#x27;-&#x27; &gt; /data/log_compress.txt提取日志中的纯数字（如订单号、手机号）：# 仅保留数字和换行符，删除其他所有字符cat /data/order.log | tr -cd &#x27;0-9\n&#x27; &gt; /data/order_num.log提取日志中的纯字母：# 仅保留大小写字母和换行符cat /data/log.txt | tr -cd &#x27;a-zA-Z\n&#x27; &gt; /data/log_letter.log
+
+6.2.3.2. grep:过滤 长结合通配符来用1、过滤以m开头的行：grep &quot;^m&quot; test.txt2、过滤以m结尾的行：grep &quot;m$&quot; test.txt3、排除空行，并打印行号：grep -vn &quot;^$&quot; lizhenya.txt4、匹配任意一个字符,不包括空行：grep &quot;.&quot; lizhenya.txt5、匹配所有：grep &quot;.*&quot; lizhenya.txt6、匹配单个任意字符：grep &quot;lizhen.a&quot; lizhenya.txt7、查找以点结尾的：grep &quot;\.$&quot; lizhenya.txt8、精确匹配到：grep -o &quot;8*&quot; lizhenya.txt9、匹配有 abc ：grep &quot;[abc]&quot; lizhenya.txt10、匹配数字所在的行&quot;[0-9]&quot;： grep &quot;[0-9]&quot; lizhenya.txt11、匹配所有小写字母[a-z]：grep &quot;[a-z]&quot; lizhenya.txt12、匹配重复8三次的地方： grep &quot;8\&#123;3\&#125;&quot; lizhenya.txt13、重复数字 8, 3-5 次：grep -E &quot;8&#123;3,5&#125;&quot; test.txt14、至少1次或1次以上：grep -E &quot;8&#123;1,&#125;&quot; lizhenya.txt-------------------------------------------------------------------------补充其他：1.-v 取反    grep -v &#x27;131&#x27; id.txt除了131 其他全部显示出来2.-r 递归过滤 -r 案例: 递归过滤目录及目录下下所有文件的内容[root@localhost oldboy]# grep -r &#x27;www.baidu.com&#x27; *code.txtx:www.baidu.comtest/1.txtx:www.baidu.com也可以这么：find ./ -type f|xargs grep www.baidu.com3.-i 不区分大小写4.-w 精确匹配5.-o 匹配过程	grep -o 查看执行过程，全称 --only-matching，只显示匹配到什么，这个一般联合其他命令用，比如说创建个匹配式，然后在log文件里面匹配输出内容：# 正则匹配IP格式（简单版，适配大部分场景），仅输出IPgrep -o &quot;\b[0-9]\&#123;1,3\&#125;\.[0-9]\&#123;1,3\&#125;\.[0-9]\&#123;1,3\&#125;\.[0-9]\&#123;1,3\&#125;\b&quot; nginx_access.log\b 单词辩解\&#123;1,3\&#125;：匹配前面字符1到3次，转义大括号\.：转义 点.6.-E 支持扩展正则 等同于egrep    grep -E &#x27;&#x27; file    egrep &#x27;过滤的内容&#x27; file    + 前一个字符连续出现1次或1次以上[] 与 + 结合使用 过滤 连续的内容[root@localhost oldboy]# egrep &#x27;8+&#x27; id.txt [root@localhost oldboy]# grep -E &#x27;8+&#x27; id.txt 同样效果| 扩展正则表达式  或者的意思egrep &#x27;lizhenya|linux&#x27; id.txt示例：/etc/ssh/ssh_config 排除文件中的#和空行egrep -v &#x27;^#|^$&#x27; /etc/ssh/ssh_config7.-A 显示过滤到内容的后 n行8.-B 显示过滤到内容的前 n行9.-C 显示过滤到内容的前后各n行10.-n 显示到过滤内容的行号11.-c 统计某个单词出现的次数统计日志中出现Failed的次数[root@db01 ~]# grep -c &#x27;Failed&#x27; /var/log/secure312.grep alias alias grep egrep 过滤颜色设置
+
+6.2.3.3. sed:行过滤 对数据是一行一行的处理的核心作用：sed 是 Linux 非交互式流编辑器，按行处理文本，无需打开文件即可批量操作，是脚本化部署、日志排查、配置修改的核心工具。核心能力：
+
+按行号&#x2F;正则匹配查找指定内容
+批量删除指定行
+局部文本替换、整行替换
+向文件指定位置插入&#x2F;追加内容
+分组捕获、提取重组文本（后向引用）
+配合管道处理命令输出，格式化提取信息
+
+## 一、查找打印（p 指令）配合 `-n` 使用（取消 sed 默认的全量输出），只打印匹配到的行，是排查最常用的功能。### 1. 按行号查找# 语法：sed -n &#x27;行号p&#x27; 文件名sed -n &#x27;3p&#x27; test.txt        # 打印第3行sed -n &#x27;$p&#x27; test.txt        # 打印最后一行（$ 代表最后一行）sed -n &#x27;2,4p&#x27; test.txt      # 打印第2到第4行sed -n &#x27;2,$p&#x27; test.txt      # 打印第2行到最后一行# 管道用法：处理命令的屏幕输出ifconfig eth0 | sed -n &#x27;2p&#x27;### 2. 按正则模式匹配查找# 语法：sed -n &#x27;/匹配规则/p&#x27; 文件名sed -n &#x27;/root/p&#x27; test.txt         # 打印包含 root 的行sed -n &#x27;/^r/p&#x27; test.txt           # 打印以 r 开头的行sed -n &#x27;/h$/p&#x27; test.txt           # 打印以 h 结尾的行sed -n &#x27;/^[a-c]/p&#x27; test.txt       # 打印 a-c 开头的行### 3. 区间匹配查找分「行号区间」和「正则字符串区间」两种：# 行号区间sed -n &#x27;2,4p&#x27; test.txt# 正则区间：匹配起始行到结束行之间的所有内容sed -n &#x27;/^bin/,/^a/p&#x27; test.txt# 生产经典：按时间范围过滤 Nginx 日志sed -n &#x27;/2024:08:00:00/,/2024:12:00:00/p&#x27; /var/log/nginx/access.log# 注意：# 1.必须加 `-n`，否则匹配行会重复输出（sed 默认打印所有行，p 指令会再打印一次）# 2.正则区间是「左开右闭」：匹配到起始行开始打印，匹配到结束行打印后停止；结束匹配未命中会一直打印到文件末尾------------------------------------------------------------------------------------------------## 二、删除行（d 指令）删除匹配到的整行，默认不修改源文件，加 `-i` 才会修改原文件。### 1. 按行号删除# 语法：sed &#x27;行号d&#x27; 文件名sed &#x27;3d&#x27; test.txt          # 删除第3行sed &#x27;2,4d&#x27; test.txt        # 删除第2到4行sed &#x27;2,$d&#x27; test.txt        # 删除第2行到最后一行### 2. 按正则匹配删除# 语法：sed &#x27;/匹配规则/d&#x27; 文件名sed &#x27;/root/d&#x27; test.txt         # 删除包含 root 的行sed &#x27;/^b/d&#x27; test.txt           # 删除以 b 开头的行sed &#x27;/^bin/,/^adm/d&#x27; test.txt  # 区间删除：bin开头 到 adm开头 的所有行### 3. 扩展正则删除（-r / -E）# 默认 sed 使用基础正则，加 `-r`（GNU 系）或 `-E`（POSIX 标准）启用扩展正则，支持 `|` 等语法：sed -r &#x27;/^bin|^lp/d&#x27; test.txt  # 删除 bin 开头 或 lp 开头的行注意：# 修改源文件务必加备份后缀，改错可快速回滚：# `sed -i.bak &#x27;3d&#x27; test.txt` 自动生成 `test.txt.bak` 备份文件------------------------------------------------------------------------------------------------## 三、文本替换（s 指令，最高频使用）### 1. 核心语法sed &#x27;s#匹配内容#替换内容#g&#x27; 文件名- `s`：替换指令- `#`：分隔符，可换成 `/` `@` 等任意字符，原则是不和替换内容里的字符冲突- `g`：全局替换（每行所有匹配项都替换）；不加 `g` 只替换每行第一个匹配项- 默认不修改源文件，加 `-i` 修改原文件举例说明：sed &#x27;s#root#oldboy#&#x27; test.txt        # 每行第一个 root 替换为 oldboysed &#x27;s#root#oldboy#g&#x27; test.txt       # 全局所有 root 替换为 oldboysed &#x27;s#root##g&#x27; test.txt             # 删除所有 root（替换为空）sed &#x27;s#[0-9]##g&#x27; test.txt            # 删除所有数字sed &#x27;s#[a-z]##g&#x27; test.txt            # 删除所有小写字母### 2. 指定范围替换# 第2到4行的 nologin 替换为 oldboysed &#x27;2,4s#nologin#oldboy#g&#x27; test.txt# 正则区间替换：adm到lp之间的行，删除所有小写字母sed &#x27;/adm/,/lp/s#[a-z]##g&#x27; test.txt### 3. 分隔符选择（避坑重点）当替换内容包含 `/` 时，换用 `#` 做分隔符，避免转义混乱：# 繁琐写法（需要转义斜杠）sed &#x27;s/\/root/\/oldboy/g&#x27; test.txt# 推荐写法：换分隔符，直观不易错sed &#x27;s#/root#/oldboy#g&#x27; test.txt### 4. 完整单词替换（词边界）`\&lt;`：匹配单词开头`\&gt;`：匹配单词结尾# 只替换完整的 bin 单词，不替换 sbin、binary 等包含bin的单词sed &#x27;s#\&lt;bin\&gt;#oldboy#g&#x27; test.txt# 生产综合案例：统计单词出现次数 TOP10sed &#x27;s#[:/0-9x]# #g&#x27; /etc/passwd | xargs -n1 | sort | uniq -c | sort -rn | head分步说明：1. sed 替换：把冒号、斜杠、数字、x 统一替换成空格2. `xargs -n1`：每行只显示一个单词3. `sort`：按字母排序4. `uniq -c`：统计每个单词出现次数5. `sort -rn`：按次数倒序排序6. `head`：默认显示前 10 行------------------------------------------------------------------------------------------------## 四、行插入 / 追加 / 整行替换### 1. i：在匹配 行之前 插入内容# 在第3行之前插入 aaased &#x27;3i aaa&#x27; test.txt### 2. a：在匹配 行之后 追加内容# 在第3行之后追加 aaased &#x27;3a aaa&#x27; test.txt# 生产常用：在文件末尾追加环境变量sed -i &#x27;$a export PATH=/usr/local/mysql/bin:$PATH&#x27; /etc/profile# 等价于：echo &#x27;export PATH=/usr/local/mysql/bin:$PATH&#x27; &gt;&gt; /etc/profile### 3. c：整行替换匹配到的行整行覆盖替换，支持行号匹配和正则匹配：# 第3行整行替换为 aaased &#x27;3c aaa&#x27; test.txt# 生产经典1：关闭 SELinuxsed -i &#x27;7c SELINUX=disabled&#x27; /etc/selinux/config# 生产经典2：修改 Nginx 运行用户（正则匹配整行替换）sed -i &#x27;/^user/c user www;&#x27; /etc/nginx/nginx.conf### 4. w：保存匹配行到新文件# 把第2-4行内容保存到 new.txtsed -n &#x27;2,4w new.txt&#x27; test.txt------------------------------------------------------------------------------------------------## 五、后向引用（分组捕获）### 1. 核心原理先用括号 `()` 将匹配到的内容分组捕获，再通过 `\1` `\2` `\3` 按顺序引用对应分组的内容，实现精准提取、重组文本。- 默认基础正则（BRE）：分组括号必须转义，写成 `\( \)`- 加 `-r/-E` 启用扩展正则（ERE）：括号直接写 `()`，推荐日常加 `-r` 使用，更易读### 2. 基础语法sed -r &#x27;s#(分组1)(分组2)#\1\2#g&#x27;# 原样输出（演示逻辑）echo oldboy | sed -r &#x27;s#(.*)#\1#g&#x27;# 提取中间内容echo oldboy | sed -r &#x27;s#ol(.*)oy#\1#g&#x27;# 输出：db# 提取指定分组echo oldboy | sed -r &#x27;s#ol(.*)(oy)#\2#g&#x27;# 输出：oy（引用第2个分组）# 提取前缀内容echo &quot;oldboy test&quot; | sed -r &#x27;s#(.*) test#\1#g&#x27;# 输出：oldboy# 生产经典案例：从 ifconfig 提取 IP 地址ifconfig eth0 | sed -n &#x27;2p&#x27; | sed -r &#x27;s#^.*inet (.*) netmask.*$#\1#g&#x27;分步拆解：1. `ifconfig eth0`：输出网卡完整信息2. `sed -n &#x27;2p&#x27;`：提取 IP 所在的第 2 行3. 后向引用：丢弃行首到 `inet ` 的内容、` netmask` 到行尾的内容，只保留中间的 IP 地址### 批量生成命令并执行# 批量创建文件seq 5 | sed -r &#x27;s#(.*)#touch \1.txt#g&#x27; | bash# 批量创建用户echo test&#123;1..3&#125; | xargs -n1 | sed -r &#x27;s#(.*)#useradd \1#g&#x27; | bash
+
+6.2.3.4. awk：取行、列作用:1.取行、列2.模糊过滤3.数据统计 数据运算4.支持for循环 if判断 数组..5.格式化输出 sed后向引用语法结构:awk &#x27;模式&#x27; file  # 不加任何动作，默认为输出的动作awk &#x27;模式&#123;print&#125;&#x27; file  # 模式+动作其他的命令输出|awk &#x27;模式&#x27;模式: 找谁，怎么找  	  指定行，指定列找，模糊过滤的找注意: 三剑客支持扩展正则写法grep -E 或者egrepsed -rawk   默认支持扩展正则---------------------------------------------------------------------------查找：1.按行查找：语法结构:    sed -n &#x27;3p&#x27; file  # sed 输出指定的行    awk &#x27;NR==3&#x27; file  # awk输出指定的行awk的内置变量:NR存放着文件中每行的行号NR的表达式:    == 等于第几行    &gt; 大于第几行    &lt; 小于第几行    &gt;= 等于等于第几行    &lt;= 小于等于第几行    != 不等于    &amp;&amp; 并且    || 或者eg:只显示文件中小于3的行: awk &#x27;NR&lt;3&#x27; 1.txt查找大于第2行 并且小于5的行: awk &#x27;NR&gt;2&amp;&amp;NR&lt;5&#x27; 1.txt2.模糊过滤文件内容查找：语法结构:    grep &#x27;&#x27; 文件    sed -n &#x27;/内容/p&#x27; 文件    awk &#x27;/内容/&#x27; 文件    awk &#x27;//,//&#x27; 文件eg:查找包含root的行: awk &#x27;/root/&#x27; 1.txt查找以1开头的行: awk &#x27;/^1/&#x27; 1.txtawk &#x27;/h$/&#x27; 1.txtawk &#x27;/^1 r/&#x27; 1.txtawk &#x27;/1 r/&#x27; 1.txt区间范围 工作中取时间范围较多：awk &#x27;/^2/,/4/&#x27; 1.txt---------------------------------------------------------------------------取列数据内容：语法结构:	awk &#x27;&#123;print $n&#125;&#x27; file$0 awk的内置变量里面存放着每行的内容$1 表示第1列 默认以空格和tab键为分隔符，如果文件中没有空格和tab键则文件内容被当做第一列$2 表示第2列，逗号 内置变量，表示空格NF 表示最后一列的列号$NF 表示最后一列的内容注意: 所有的字符串在awk中被识别为变量，所以输出字符串必须加双引号eg:显示文件的第一列: awk &#x27;&#123;print $1&#125;&#x27; 1.txt显示文件的第1列和第3列: 中间分割是可以自己加上去的	awk &#x27;&#123;print $1,$3&#125;&#x27; count.txt	awk &#x27;&#123;print $1&quot;\t&quot;$3&#125;&#x27; count.txt	awk &#x27;&#123;print $1&quot;----&quot;$3&#125;&#x27; count.txt	awk &#x27;&#123;print $1&quot; &quot;$3&#125;&#x27; count.txt先输出第3列 后面输出第1列: awk &#x27;&#123;print $3&quot; &quot;$1&#125;&#x27; count.txt取出最后一列的内容: awk &#x27;&#123;print $NF&#125;&#x27; count.txt取出磁盘中的第5列: df -h|awk &#x27;&#123;print $5&#125;&#x27;取出倒数第二列: 	df -h|awk &#x27;&#123;print NF-1&#125;&#x27;	df -h|awk &#x27;&#123;print $(NF-1)&#125;&#x27;取出每行的倒数第2列的内容: awk &#x27;&#123;print $(NF-1)&#125;&#x27; count.txt$0是原样全部输出awk指定分隔符: 默认以tab键或空格分隔-Fawk -F: # 方法1awk -F &quot;:&quot;  # 方法2意思按上面的分割符取出指定多分隔符：awk -F &quot;:/&quot; &#x27;&#123;print $2&#125;&#x27; 2.txt+连续出现1次及1次以上的作为1个整体：awk -F &quot;[:/]+&quot; &#x27;&#123;print $5,$6&#125;&#x27; 2.txt理解正则表达式+[root@db01 ~]# echo ---test-+oldboy++::|awk -F &quot;-&quot; &#x27;&#123;print $4&#125;&#x27;test[root@db01 ~]# echo ---test-+oldboy++::|awk -F &quot;[-]+&quot; &#x27;&#123;print $2&#125;&#x27;test[root@db01 ~]# echo ---test-+oldboy++::|awk -F &quot;[-+]&quot; &#x27;&#123;print $6&#125;&#x27;oldboy[root@db01 ~]# echo ---test-+oldboy++::|awk -F &quot;[-+]+&quot; &#x27;&#123;print $3&#125;&#x27;oldboy
+
+6.3. shell脚本6.3.1. 基本要求概述6.3.1.1. 注释规范：3种# 单行: &#x27;这整段都是注释可以写变更说明、参数列表不会被当作命令执行: 是 Shell 的空命令，后面跟一个不展开的字符串（单引号保证不解析变量）&#x27;: &lt;&lt;&#x27;COMMENT&#x27;多行注释内容运维操作说明：2025-06-05 老张：将支付服务发布版本回滚到 v2.3COMMENT在团队里，任何一个放到生产服务器的脚本，必须有一个头部注释模版，而且会用多行注释来写说明，方便用 head 命令快速查看，新人接手只需 head -20 script.sh 就能看懂：#!/bin/bash: &lt;&lt;&#x27;SCRIPT_INFO&#x27;脚本名称：deploy_payment.sh功能：支付服务灰度发布，支持按比例切换流量参数：$1 - 发布版本号，$2 - 灰度比例(默认10)作者：老张日期：2026-06-05变更记录：  v2.0 增加回滚检测  v1.0 初始版本SCRIPT_INFOset -euo pipefail  # 严格模式，出错立即退出
+
+6.3.1.2. 头文件引用说明# #!/bin/bash 叫 Shebang（也叫 Hashbang），是脚本的第一行，告诉系统：用哪个解释器来执行这个文件# 比如说实际执行 /bin/bash ./script.sh 选择：# 如果是项目内部纯 Bash 脚本，我写 #!/bin/bash，因为路径固定，性能最好。# 如果要发给客户，不知道人家机器 bash 在哪，就写 #!/usr/bin/env bash，更通用。但注意，env 会在 PATH 里找第一个 bash，有被人篡改 PATH 的风险（安全敏感环境需评估）。# 如果脚本只用 POSIX 语法，不依赖 Bash 特性，我就写 #!/bin/sh，比如一些安装脚本，要跑在 Alpine（默认没有 bash）这种精简系统上。#!/bin/bash	        固定用系统自带的 Bash	绝大多数生产脚本#!/usr/bin/env bash	在 PATH 里找 bash	追求可移植性（不同机器 bash 路径可能不同）#!/bin/sh       	系统默认 shell（可能是 dash、ash）	兼容性要求高的脚本#!/usr/bin/python3	用 Python3 执行	Python 脚本#!/bin/false	    阻止直接执行该脚本	只有被 source 或 . 加载才生效，如公共函数库PATH说明：	PATH=&quot;$PATH:/opt/&quot;	echo $PATH:	/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin:/opt/这个是在PATH基础上，增加/opt/这个文件目录，这一长串 = 6 个专门放命令的目录，按顺序排好，系统找命令时挨个打开看，找到就执行，相当于：是分割符
+
+6.3.1.3. 脚本执行方式三种脚本执行方式:第1和第2中 在子shell中执行第3中      在父shell中执行解释器分为父shell和子shell父shell: 登录系统默认为父shell子shell: 在默认的父shell中执行bash 进入到了一个子shell中，在执行脚本的时候，调用子shell执行内容1.直接执行：sh test.sh2.给权限再执行：chmod+x test.sh./test.sh  /root/test.sh3. .或者 source执行脚本 不需要加执行权限. test.shsource test.sh# 还有不常用的执行方式；	#1. bash &lt; test.sh	#2. cat test.sh |bash
+
+6.3.2. shell变量6.3.2.1. 变量分类和要求环境变量(全局变量):系统默认存在 对所有的父shell和子shell生效普通变量(局部变量):自定义变量 只对当前的shell生效临时变量: 直接定义 或者使用export定义的变量永久变量: 写入到文件中或者/etc/profile变量文件中直接定义: name=oldboy 只对当前的shell生效    使用export: 	export name=oldboy 对当前父shell下的所有的shell生效变量文件：	/etc/profile 常用的变量配置文件，每次开机和每次的远程连接都会执行    .bash_profile    .bashrc    /etc/bashrc变量命令规范：    name_age    NAME_AGE 系统默认变量都是大写    Name_Age 大驼峰语法    name_Age 小驼峰语法        命令定义 `` 或者 $()：先执行``中的命令，然后将执行的结果赋值给变量  也可用``替换（）count=$(cat /etc/passwd|wc -l)echo $count------------------------------------------------------------------变量定义：1.不连续用引号：test=&quot;a b c d&quot;，同理定义命令用单引号2.数字定义：同理，不连续要用引号age=1823423423age=&quot;182342 3423&quot;3.变量和变量之间需要使用&#123;&#125;:[root@web01 ~]#echo &quot;$&#123;Ip&#125;_$Host&quot;10.0.0.7_web014.定义路径：dir=/etc/sysconfig/network-scripts/5.定义文件：file1=/etc/passwd file2=/etc/hosts6.定义命令：hehe=&#x27;touch /tmp/hehe.txt&#x27;[root@web01 ~]#$hehe特殊变量：	$0 获取Shell脚本的名称,如果执行脚本带路径，则名称也带路径。	$n 获取脚本的第n个参数，从$1开始，可以传递数字、字符串和序列，从$10开始需要使用&#123;&#125; 引起来	$? 获取上一条命令的执行结果，0为成功，非0失败。	$# 获取脚本传参的个数	$* 获取脚本传参的所有参数,默认和$@相同，在循环体中加双引号表示一个整体	$@ 获取脚本传参的所有参数,默认和$*相同，在循环体中加双引号表示独立的参数	$_ 获取脚本的最后一个参数	$$ 获取脚本的PID号	$! 获取上一个在后台运行脚本的PID号------------------------------------------------------------------举例说明：[root@web01 day01]#set -- &quot;I am&quot; lizhenya I am 18[root@web01 day01]#echo $*I am lizhenya I am 18[root@web01 day01]#for i in &quot;$*&quot;;do echo $i;doneI am lizhenya I am 18[root@web01 day01]#for i in &quot;$@&quot;;do echo $i;doneI amlizhenyaIam18你执行的 set -- &quot;I am&quot; lizhenya I am 18 是手动设置 Shell 的「位置参数」（也就是 $1、$2、$3... 这些内置变量），核心作用是：--：防止后面的内容以 - 开头被当成 set 的选项；&quot;I am&quot;：加了引号，所以是一个整体，作为 $1；后面的 lizhenya、I、am、18 依次作为 $2、$3、$4、$5。&quot;$*&quot;（加引号）	所有位置参数拼接成一个字符串（用默认空格连接）	整个是一个整体，for 循环只循环 1 次&quot;$@&quot;（加引号）	保留每个位置参数的原始边界	&quot;I am&quot; 还是一个整体，for 循环循环 5 次------------------------------------------------------------------默认值机制：$&#123;var:-默认值&#125;	如果 var 未设置或为空，返回默认值，不改变原变量	给局部变量赋默认值$&#123;var:=默认值&#125;	如果空，则把默认值赋给 var 并返回	确保环境变量已被设置$&#123;var:?错误信息&#125;	如果空，打印错误并退出脚本	强制必填变量$&#123;var:+替换值&#125;	如果变量非空，返回替换值，否则空	条件性替换，少用# 1. 参数默认值backup_dir=$&#123;1:-/data/backup&#125;         # 没传参数就用默认备份目录# 2. 读取环境变量，不设置就用3306db_port=$&#123;DB_PORT:-3306&#125;# 3. 强制必须设置deploy_version=$&#123;DEPLOY_VER:?错误：必须指定 DEPLOY_VER 环境变量！&#125;
+
+6.3.2.2. 变量传参：1.直接传参：echo $1echo $name=$12.赋值传参：a=$1echo name=$a3.位置参数 $1 $2 ... + 特殊变量执行 ./deploy.sh payment v2.3，脚本里 $1 就是 payment，$2 就是 v2.3举例说明：不输入参数就报错退出，防止乱跑#!/bin/bash# 用法: ./restart.sh &lt;模块名&gt;module=$1if [ -z &quot;$module&quot; ]; then    echo &quot;必须输入模块名！例如：./restart.sh payment&quot;    exit 1fiecho &quot;正在重启 $module ...&quot;systemctl restart $module4.getopts：处理带选项的参数（-h -p 8080）像 nginx -t -c conf 这种，用 getopts 解析 -x value 参数#!/bin/bashversion=&quot;&quot;ratio=10     # 默认10%while getopts &quot;v:r:&quot; opt; do    case $opt in        v) version=$OPTARG ;;        r) ratio=$OPTARG ;;        *) echo &quot;用法: $0 -v &lt;版本&gt; -r &lt;灰度比例&gt;&quot; &amp;&amp; exit 1 ;;    esacdoneif [ -z &quot;$version&quot; ]; then    echo &quot;版本号必填！&quot;    exit 1fiecho &quot;发布 $version，灰度比例 $&#123;ratio&#125;%&quot;执行：./deploy.sh -v v2.5 -r 30操作结果： 生产上经常调整比例，有了默认值就不容易误操作。面试点：面试官：“getopts 能处理长选项吗？”答：纯 shell 的 getopts 不支持 --version，需要自己用 case 解析。线上我们会直接用成熟框架，或者用 getopt（注意安全）。5.read输入：目的是人工确认#!/bin/bashecho &quot;你即将对数据库 $1 执行备份，是否继续？(yes/no)&quot;read -r confirmif [ &quot;$confirm&quot; != &quot;yes&quot; ]; then    echo &quot;已取消&quot;    exit 0fimysqldump $1 &gt; /backup/$1_$(date +%F).sql其他用法补充：read -s -p &quot;输入密码:&quot; pass：密文输入，不回显，写拉取镜像脚本常用。read -t 10 -p &quot;10秒内按回车继续&quot;：超时自动跳过，适合巡检脚本。6.从文件/管道读入（标准输入）#!/bin/bash# 从管道接收日志内容grep &quot; 500 &quot; /var/log/nginx/access.log | ./count_500.sh#!/bin/bash# 读取标准输入，统计行数lines=$(wc -l)echo &quot;500错误共: $lines 次&quot;
+
+6.3.2.3. 字符串变量Shell 变量默认全是字符串
+1. 定义与拼接双引号 &quot; &quot; —— 会解析变量和转义符单引号 &#x27; &#x27; —— 所见即所得，原样输出反引号或 $() —— 不存字符串，是存命令的结果name=&quot;payment&quot;   # 等号两边不能有空格version=&quot;2.3.1&quot;# 拼接（三种方式）app=&quot;$&#123;name&#125;-$&#123;version&#125;&quot;          # 推荐，边界清晰 必须用这种 生产规范app=&quot;$name-$version&quot;              # 也行app=$&#123;name&#125;-$&#123;version&#125;            # 双引号省略有风险log_path=&quot;/data/logs/$&#123;app_name&#125;/$(date +%Y%m%d)&quot;2. 常用操作str=&quot;/data/logs/nginx/access.log&quot;name=&quot;I am lizhenya&quot;# 长度echo $&#123;#str&#125;          # 29# 截取子串echo $&#123;str:5&#125;         # /logs/nginx/access.log （从第5个字符开始）echo $&#123;str:0:5&#125;       # /data# $&#123;str#pattern&#125;	从左最短匹配删除	掐头去一点echo $&#123;name#I&#125;    # am lizhenya（删掉I）echo $&#123;name#I*m&#125;  #lizhenya （匹配 I ... m 最短的那）# $&#123;str##pattern&#125;	从左最长匹配删除	掐头去全部echo $&#123;str##*/&#125;         # access.log （删掉最后一个/前面所有）# $&#123;str%pattern&#125;	从右最短匹配删除	去尾去一点echo $&#123;url%.com&#125;   # www.baidu#$&#123;str%%pattern&#125;	从右最长匹配删除	去尾去全部echo $&#123;url%%.*&#125;    # www实际常用法：log_path=&quot;/data/logs/nginx/access.log&quot;echo $&#123;log_path##*/&#125;      # access.log  （删掉最后一个/之前所有，取出文件名）echo $&#123;log_path%/*&#125;       # /data/logs/nginx （删掉最后一个/之后所有，取出目录）3.替换 —— 批量改配置、改URLurl=&quot;http://old.example.com/api&quot;echo $&#123;url/old/new&#125;         # http://new.example.com/api （替换第一个匹配）echo $&#123;url//\//_&#125;           # http:_old.example.com_api （替换所有/为下划线）
+
+6.3.2.4. 数组Shell 支持两种数组：
+
+普通数组（索引数组）：用数字0、1、2当编号
+关联数组：用字符串当编号，像字典普通数组（索引数组）：
+
+1.定义：# 等号两边不能有空格；元素用空格隔开，不是逗号# 方法一：括号包裹，空格分隔modules=(&quot;payment&quot; &quot;order&quot; &quot;user&quot; &quot;inventory&quot;)# 方法二：逐个赋值modules[0]=&quot;payment&quot;modules[1]=&quot;order&quot;2.取值与长度：echo $&#123;modules[0]&#125;         # paymentecho $&#123;modules[@]&#125;         # 所有元素：payment order user inventoryecho $&#123;#modules[@]&#125;        # 元素个数：4echo $&#123;#modules[0]&#125;        # 第一个元素的字符长度：73.数组遍历： —— 批量运维核心for module in &quot;$&#123;modules[@]&#125;&quot;; do #格式直接背      systemctl restart $module    echo &quot;$module 已重启&quot;done4.切片和追加：# 取第1到第2个元素（索引从0开始）echo $&#123;modules[@]:1:2&#125;      # order user# 追加元素modules+=(&quot;gateway&quot;)        # 数组变成5个# 动态构建部署列表。比如先查数据库得到需要更新的服务名，一个个追加到数组，最后统一执行。
+
+关联数组（字符串下标）：
+必须要先声明 declare -A，否则会被当成普通数组。1.定义与取值：declare -A service_portservice_port=( [&quot;payment&quot;]=8080 [&quot;order&quot;]=8081 [&quot;user&quot;]=8082 )echo $&#123;service_port[payment]&#125;   # 8080echo $&#123;!service_port[@]&#125;        # 所有键：payment order userecho $&#123;service_port[@]&#125;         # 所有值：8080 8081 80822.遍历：for svc in &quot;$&#123;!service_port[@]&#125;&quot;; do    echo &quot;服务 $svc 监听端口 $&#123;service_port[$svc]&#125;&quot;done# 生产场景：多环境配置映射# 优点： 再也不用写一堆 if [ $env == &quot;dev&quot; ] ... elif ...，清晰好维护。# 另一个经典场景： K8s 节点标签管理脚本里，我们把节点名和要打的标签做成关联数组，批量打标。declare -A db_config=(    [&quot;dev&quot;]=&quot;10.0.0.1:3306:dev_db&quot;    [&quot;test&quot;]=&quot;10.0.0.2:3306:test_db&quot;    [&quot;prod&quot;]=&quot;10.0.1.1:3306:prod_db&quot;)env=$&#123;1:-dev&#125;IFS=&#x27;:&#x27; read -r host port dbname &lt;&lt;&lt; &quot;$&#123;db_config[$env]&#125;&quot;echo &quot;当前环境 $env，连接 $host:$port/$dbname&quot;# -r 表示不把反斜杠当成转义符，保持原样。# 它会按 IFS（内部字段分隔符，默认是空格、Tab、换行）把字符串切成几段，依次赋给 host、port、dbname。# 但是现在字符串是用冒号分隔的，所以我们要临时改 IFS
+
+6.3.3. 数值运算6.3.3.1. 整数运算1.直接算：加：1 + 1减：1 - 1乘：2 \* 10除：10 / 22.算术扩展 $(( )) 与 (( ))（最常用）:a=$((5 + 3))       # 赋值((b = 5, c = 3))   # 多条，逗号分隔((count++))        # 自增echo $((10 / 3))   # 输出3（整数截断）3.let 命令（老式）:let a=5+3let &quot;a = 5 * 3&quot;let a++            # 自增4.expr 命令（更老，外部命令）:expr 5 + 3          # 8（必须有空格）expr 5 \* 3         # 15（乘必须转义）expr length &quot;abc&quot;   # 3（字符串长度）result=$(expr $a + $b)  # 旧的写法
+
+6.3.3.2. 小数运算Shell 原生不支持浮点数，必须借助外部工具。
+1.bc —— 任意精度计算器echo &quot;3.14 + 2.5&quot; | bc                    # 5.64echo &quot;scale=4; 10/3&quot; | bc                 # 3.3333echo &quot;sqrt(2)&quot; | bc -l                    # 1.414...（需-l加载数学库）rate=$(echo &quot;scale=2; $used*100/$total&quot; | bc)  # 生产用法2.awk —— 文本处理兼计算awk &#x27;BEGIN&#123;print 3.14+2.5&#125;&#x27;                # 5.64awk &#x27;BEGIN&#123;printf &quot;%.2f&quot;, 10/3&#125;&#x27;           # 3.33# 生产：分析日志计算平均响应时间awk &#x27;&#123;sum+=$10&#125; END&#123;printf &quot;avg=%.2f\n&quot;, sum/NR&#125;&#x27; access.log
+
+6.3.4. 条件表达式
+6.3.4.1. 字符串判断= 或 ==	  相等	        [[ &quot;$env&quot; == &quot;prod&quot; ]]!=	      不等	        [[ &quot;$status&quot; != &quot;running&quot; ]]&lt; / &gt;	  字典序比较	    [[ &quot;a&quot; &lt; &quot;b&quot; ]] 真（注意转义）-z	      长度为0（空）	[[ -z &quot;$1&quot; ]]-n	      长度非0（非空）[[ -n &quot;$name&quot; ]]
+6.3.4.2. 数值判断-eq	等于	[[ $count -eq 0 ]]-ne	不等于	[[ $retry -ne 3 ]]-gt	大于	[[ $usage -gt 80 ]]-ge	大于等于	[[ $# -ge 2 ]]-lt	小于	[[ $percent -lt 10 ]]-le	小于等于	[[ $timeout -le 30 ]]
+6.3.4.3. 文件判断（运维命根子）-e	文件存在-f	是普通文件-d	是目录-r / -w / -x	可读/写/执行-s	文件非空（大小&gt;0）-L	是符号链接-O	属主是当前用户-nt / -ot	newer than / older than（修改时间比较）# 检查配置文件是否存在且可读if [[ -f &quot;/etc/app/config.yml&quot; &amp;&amp; -r &quot;/etc/app/config.yml&quot; ]]; then    source /etc/app/config.ymlelse    echo &quot;配置文件缺失或不可读&quot; &amp;&amp; exit 1fi
+
+6.3.4.4. 逻辑运算（组合条件）与	[[ 条件1 &amp;&amp; 条件2 ]] 或 [ 条件1 ] &amp;&amp; [ 条件2 ]或	[[ 条件1 || 条件2 ]]非	[[ ! 条件 ]]注意： [ ] 里 -a -o 已废弃，用 &amp;&amp; || 分隔多个 [ ]。if [[ &quot;$env&quot; == &quot;prod&quot; &amp;&amp; $load -gt 10 ]]; then    echo &quot;生产环境负载过高，触发扩容&quot;fi
+
+6.3.4.5. 正则匹配（[[ ]] 专享大招）if [[ &quot;$ip&quot; =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then    echo &quot;IP格式正确&quot;fi生产： 校验用户输入的IP、端口、版本号格式。
+
+6.3.4.6. (( )) 里的三元表达式max=$(( a &gt; b ? a : b ))生产： 简短赋值，比如取最大重试次数。
+
+
+6.3.5. 逻辑循环控制6.3.5.1. 条件分支：if 语句if [[ 条件 ]]; then    # 成立时执行elif [[ 条件 ]]; then    # 第二条件else    # 否则fi
+
+6.3.5.2. 循环三兄弟：for、while、until1.for 循环（遍历列表 / 计数）for item in &quot;item1&quot; &quot;item2&quot; &quot;item3&quot;; do    echo &quot;处理 $item&quot;doneservices=(&quot;payment&quot; &quot;order&quot; &quot;user&quot;)for svc in &quot;$&#123;services[@]&#125;&quot;; do  # 注意引用格式     systemctl restart &quot;$svc&quot;    echo &quot;$svc 已重启&quot;done# C语言风格for (( i=1; i&lt;=5; i++ )); do    echo &quot;重试第 $i 次&quot;done2.while 循环while [[ 条件 ]]; do    循环体done3.until 循环（条件假就一直跑，与 while 相反）until [[ 条件成立 ]]; do    没成立就执行doneuntil [[ ! -f /var/lock/deploy.lock ]]; do    echo &quot;等待锁释放...&quot;    sleep 5doneecho &quot;开始部署&quot;
+
+6.3.5.3. 多路选择：case 语句# 结合echo颜色输出 配套用 做菜单case &quot;$变量&quot; in    模式1)        命令 ;;    模式2)        命令 ;;    *)        默认 ;;esac面试常问： “case 匹配模式支持哪些？”答：支持通配符 *（任意长度）、?（单个字符）、[abc]（字符集），也可以用 | 组合，比如 start|begin)。case &quot;$log_level&quot; in    debug|info|warn|error)        echo &quot;合法&quot; ;;    *)        echo &quot;非法&quot; ;;esac这是特殊的一种：select 菜单循环（交互式脚本专用）select choice in &quot;启动&quot; &quot;停止&quot; &quot;退出&quot;; do    case &quot;$choice&quot; in        &quot;启动&quot;) echo &quot;执行启动&quot;;;        &quot;停止&quot;) echo &quot;执行停止&quot;;;        &quot;退出&quot;) break;;    esacdone
+
+6.3.5.4. 中断与退出：break &#x2F; continue &#x2F; exitbreak [n]	跳出当前循环（n 可指定跳几层）continue [n]	跳过本次循环剩余部分，进入下一次exit [n]	退出脚本，n 为退出码面试可能问： “break 2 什么意思？”答：跳出两层循环。比如外层是模块循环，内层是每个模块的重试循环，一旦成功，break 2 直接跳出两个循环继续下一个模块。exit 的退出码规范： 0 成功，非0 失败。运维脚本里我们一定用 exit 0、exit 1 等明确标识，方便 Jenkins 等 CI/CD 系统判断脚本是否成功。
+
+6.3.6. 函数6.3.6.1. 定义和调用1.定义方式：# 方式一：不用 function 关键字（常见）函数名() &#123;    命令&#125;# 方式二：用 function 关键字（更清晰）function 函数名() &#123;    命令&#125;2.调用：function say_hello() &#123;    echo &quot;Hello, $1!&quot;&#125;say_hello &quot;老张&quot;        # 输出：Hello, 老张!注意： 函数名后面直接跟参数，用空格隔开，不像编程语言加括号。面试必问： “Shell 函数必须先定义后调用吗？”答：是的，脚本从上到下解释执行，定义必须写在调用之前。
+
+6.3.6.2. 函数的参数与返回值1.函数参数：函数内部，$1 指的是传给函数的第一个参数，不是脚本的命令行参数。脚本自己的参数在函数外还有效，进了函数就用函数自己的 $1。function check_port() &#123;    local svc_name=$1    local port=$2    if ss -tlnp | grep -q &quot;:$port &quot;; then        echo &quot;$svc_name 端口 $port 正常&quot;        return 0    else        echo &quot;$svc_name 端口 $port 异常&quot; &gt;&amp;2        return 1    fi&#125;# 调用check_port payment 80802.返回值：return 与 echo 两个套路用 return：返回退出状态码（0-255）if check_port payment 8080; then    echo &quot;继续下一步&quot;else    echo &quot;中止流程&quot;fi重要： return 只能返回数字，不能返回字符串。返回 0 表示成功，非 0 表示失败。用 echo：返回字符串function get_time() &#123;    date +%Y-%m-%d_%H:%M:%S&#125;current_time=$(get_time)echo &quot;备份时间：$current_time&quot;面试常问： “怎么从函数返回字符串？”答：函数内 echo 出去，调用时 result=$(函数名 参数) 接收。return 只能返回退出码。坑点： 函数里如果有其他 echo 调试信息，也会被捕获进结果。所以正式函数只输出必要数据，调试用 &gt;&amp;2（输出到标准错误）。
+
+6.3.6.3. 局部变量与作用域（生产铁律）核心：函数内部变量必须用 local 声明！如果不加 local，变量就是全局的，函数内修改会污染全局，脚本一大就会出现莫名其妙的 bug。count=10function increase() &#123;    local count=$1       # 局部变量    echo $((count+1))    # 输出结果，不污染全局&#125;new_count=$(increase $count)echo &quot;旧值 $count，新值 $new_count&quot;
+
+6.3.6.4. 高阶补充：函数库、递归、trap1.函数库（source）把通用函数放在独立文件，不同脚本共享。# 在 common.lib.sh 里定义函数function check_port() &#123; ... &#125;# 其他脚本引入source ./common.lib.shcheck_port 80802.trap 配合函数做资源清理function cleanup() &#123;    rm -f /tmp/deploy.lock    echo &quot;临时文件已清理&quot;&#125;trap cleanup EXIT   # 脚本退出时自动调用清理函数面试： “线上脚本用 trap 注册清理函数，防止中途退出遗留锁文件，保证幂等性。”
+
+
+
+6.3.7. 交互脚本expectexpect 不是 Shell 本身的命令，而是个专门干“自动交互”的独立程序。凡是需要你手动敲密码、确认 yes&#x2F;no 等键盘输入的对话场景，它都能模拟人工去敲键盘。运维用它最多的就是自动化 SSH 登录、批量传文件、批量改密码这些不能用管道传密码的顽固场景。
+ssh、scp、passwd 这些命令为了安全，故意不从标准输入读密码，而是直接读键盘设备（终端）。所以你用 echo “123456” | ssh root@host 登录，密码根本不会被 ssh 接收。expect 就是在中间扮演“假键盘”，把预设好的字符串发给目标命令，让对方以为是人手打的。
+expect 脚本的核心就三句话：
+
+spawn：启动要交互的程序（比如 ssh）
+expect：等待屏幕上出现某个特征字符串（比如 password:）
+send：看到特定字符串后，把要输入的内容发过去（比如密码）
+
+脚本开头：expect脚本一般以#!&#x2F;usr&#x2F;bin&#x2F;expect 开头，类似bash脚本。expect脚本常常以.exp或者.ex结束。expect主要命令：
+
+spawn 新建一个进程，这个进程的交互由expect控制
+expect 等待接受进程返回的字符串，直到超时时间，根据规则决定下一步操作
+send 发送字符串给expect控制的进程
+set 设定变量为某个值
+exp_continue 重新执行expect命令分支
+[lindex $argv 0] 获取expect脚本的第1个参数
+[lindex $argv 1] 获取expect脚本的第2个参数
+set timeout -1 设置超时方式为永远等待
+set timeout 30 设置超时时间为30秒
+interact 将脚本的控制权交给用户，用户可继续输入命令
+expect eof 等待spawn进程结束后退出信号eof
+
+设置ssh自动登录#!/usr/bin/expect# 设定超时时间set timeout 10# 启动 ssh 进程spawn ssh root@192.168.1.100# 等待密码提示expect &quot;password:&quot;# 发送密码（\r 表示回车）send &quot;MySecret123\r&quot;# 登录后把控制权交给人interact执行方式：expect login.exp 或者 chmod +x 后 ./login.exp
+
+6.3.7.1. &#x2F;etc&#x2F;init.d&#x2F;functions它是 SysV init 风格启动脚本的“公共函数库”，主要存在于 RHEL&#x2F;CentOS 6.x 及更早版本中。本质上就是一个 Shell 函数库。
+#!/bin/bash[ -f /etc/init.d/functions ] &amp;&amp; . /etc/init.d/functions1.action() —— 执行命令并打印格式化结果作用： 执行一条命令，成功显示绿色 [ OK ]，失败显示红色 [FAILED]。action &quot;Starting Nginx: &quot; /usr/sbin/nginxStarting Nginx:  [  OK  ]Starting Nginx:  [FAILED]2.daemon() —— 启动守护进程（后台运行）作用： 以后台方式启动一个程序，并检查是否已在运行，防止重复启动。daemon --check nginx /usr/sbin/nginx先检查 nginx 进程是否已经存在，如果在，输出警告并跳过。否则，执行 /usr/sbin/nginx 并放入后台（自动加 &amp;）。返回值：启动成功 0，失败 1。3. killproc() —— 停止进程作用： 向指定进程发信号，默认先 TERM，超时后 KILL。killproc /usr/sbin/nginx4.status() —— 查看服务状态作用： 检查指定进程是否在运行，并输出友好信息。status /usr/sbin/nginx5.echo_success() / echo_failure() —— 手动输出状态标志作用： 只打印 [ OK ] 或 [FAILED]，不执行命令。if check_config; then    echo_successelse    echo_failurefi
+
+6.4. 定时任务6.4.1. 定时任务概述现在一般用这个：crond(crontab) 定时任务软件 (软件包cronie)crond 分类: 用户定时任务与系统定时任务下面是系统定时任务： 不用，了解，系统中毒木马藏这里面/etc/cron.hourly：    系统定时任务每个小时运行这个目录里的内容/etc/cron.daily：     系统定时任务每天运行这个目录里的内容/etc/cron.weekly：    系统定时任务每周运行这个目录里的内容/etc/cron.monthly：   系统定时任务每月运行这个目录里的内容/etc/cron.deny：  /etc/crontab：        系统定时任务的配置文件之一 系统定时任务+logrotate命令 完成对 日志的日志切割/日志轮询  /var/log/cron /var/log/messages /var/log/secure 下面是用户定时任务：crontab -l （list）列表 查看用户的定时任务 cron table crontab -e (edit) 编辑用户的定时任务 /var/spool/cron/root  （root是用户名 root用户的定时任务） -----------------------------------------------------------------------定时任务配置方式：方法1: 修改系统的配置文件    /etc/crontab	1.配置定时任务:    直接vim编辑crontab即可	2.查看定时任务：    cat /etc/crontab	方法2: 用户的定时任务    /var/spool/cron/root  # root定时任务的配置文件    /var/spool/cron/oldboy # oldboy用户定时任务的配置文件 普通用户很少用！！1.配置定时任务:    使用命令: crontab -e 编辑用户的配置文件    当前登录用户root: crontab -e (有语法检测功能) 相当于：vim /var/spool/cron/root2.查看定时任务    crontab -l     cat /var/spool/cron/root注意：上面2种方法并行，实际中配一个就行，不然2个都要运行-----------------------------------------------------------------------
+
+6.4.2. 定时任务编写语法格式: 系统的定时任务/etc/crontab五颗星分别代表的含义:* * * * * root 可执行命令分钟-小时-日-月-周---------------------------------第一颗星: 分钟  0 - 59  每分钟第二颗星: 小时  0 - 23  每小时第三颗星: 日   1 - 31第四颗星: 月   1 - 12第五颗星: 周   0 - 6  星期天可以用0或者7表示* 表示每的意思*/n 表示间隔n分钟： */5 每隔5分钟- 表示区间范围： * 1-8 * * * 表示凌晨1点到8点的每分钟执行...               00 1-8 * * * 表示凌晨1点到8点的整点执行...., 表示间隔： * 1-8,14,17 * * *表示凌晨1点到8点 下午的2点和下午的5点 每分钟执行#　凌晨12点表示方法:    0 0 * * *用户语法格式: crontab -e 相当于 vim /var/spool/cron/root* * * * * 可执行命令举例说明：案例: 每分钟把自己的名字 追加到 oldboy.txt  # 默认在家目录[root@db01 ~]# cat /etc/crontab* * * * * root  echo oldboyedu &gt;&gt; oldboy.txt案例: 每隔5分钟执行一次定时任务 时间同步*/5 * * * * 每隔5分钟  05 10 15 20 25..05 * * * * 每小时5分钟 1.05 2.05 3.05# 注意用户的定时任务PATH变量只识别: /usr/bin/和/bin目录[root@db01 ~]# which ntpdate/usr/sbin/ntpdate[root@db01 ~]# crontab -l* * * * * ntpdate ntp1.aliyun.com重新配置用户的PATH变量:[root@db01 ~]# crontab -lPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/.local/bin:/root/bin* * * * * ntpdate ntp1.aliyun.com使用绝对路径:[root@db01 ~]# crontab -l* * * * * /usr/sbin/ntpdate ntp1.aliyun.com
+
+6.4.3. 定时任务注意事项排查定时任务问题时候，查看两个文件1.定时任务的日志:/var/log/cron2.系统邮件，更加详细[root@db01 ~]# cat /var/spool/mail/root注意：* 23,00-07/1 * * * 加/1和不加/1是相同的概念 每小时* 和 */1 相同吗？ 相同在定时任务中不识别% 需要加\或者%在脚本中没问题的[root@db01 ~]# #创建一个当前时间命名的一个文件[root@db01 ~]# touch `date +%F`.txt[root@db01 ~]# lltotal 12-rw-r--r-- 1 root root  0 Mar 25 11:15 1.txt-rw-r--r-- 1 root root  0 Mar 25 11:17 2024-03-25.txt需求: 创建一个以IP地址和时间的目录第一天[root@db01 ~]# mkdir 10.0.0.200_2024-03-25 # 不通用第二天[root@db01 ~]# mkdir 10.0.0.200_2024-03-26[root@db01 ~]# echo `hostname -I|sed &#x27;s# ##g&#x27;`_`date +%F`10.0.0.200_2024-03-25[root@db01 ~]# echo `ifconfig eth0|awk &#x27;NR==2&#123;print $2&#125;&#x27;`_`date +%F`10.0.0.200_2024-03-25需求: 创建主机名称+IP地址的目录[root@db01 ~]# echo `hostname`_`hostname -I`db01_10.0.0.200[root@db01 ~]# mkdir `hostname`_`hostname -I`%在定时任务中需要加\，或者写入脚本[root@db01 ~]# crontab -l#* * * * * /usr/sbin/ntpdate ntp1.aliyun.com* * * * * mkdir /root/`hostname`_`date +\%F-\%M`使用脚本:* * * * *  sh /root/1.sh[root@db01 ~]# cat 1.shmkdir /root/`hostname`_`date +%F-%M`注意事项:没有开启邮件服务器的情况下:定时任务的结果如果不定向到空或者文件中，生成大量的小文件堆积到系统中，从而导致inode号码被沾满，最终导致磁盘无法写入数据产生临时小文的位置:[root@db01 ~]# ll /var/spool/postfix/maildrop/total 0关闭邮件服务在查看:[root@db01 ~]# systemctl stop postfix[root@db01 ~]# systemctl disable postfix会生成大量的小文件[root@db01 ~]# ll /var/spool/postfix/maildrop/|headtotal 1212-rwxr--r-- 1 root postdrop 497 Mar 25 11:53 01E3D30AAAA1-rwxr--r-- 1 root postdrop 498 Mar 25 11:53 036F830AAAD0-rwxr--r-- 1 root postdrop 498 Mar 25 11:52 0379830AA518-rwxr--r-- 1 root postdrop 498 Mar 25 11:52 052D230AA756......如果邮件服务开启了，则不会产生临时小文件。服务优化: 邮件服务关闭，耗费服务器性能解决方法:1.将结果定向到空2.开启邮件服务3.通过定时任务清空目录下所有的小文件面试题: 什么情况系统的inode号会变满 大量小文件1.定时任务没有开启邮件服务器情况会产生临时小文件2.服务运行过程中，开发问题产生临时小文件3.误操作脚本问题如何查找大量的小文件 大部分都在同一个目录下：find / -type d -size +1M如果查找大文件  find / -size +100M作业:每分钟把/etc/目录 打包备份到/tmp目录并且要求在/tmp下创建主机名称+时间(精确到分钟)的目录
+
+
+6.5. 邮件系统6.5.1. 邮件原理生产里最常用的组合：Postfix（MTA 发邮件） + Dovecot（MDA+MRA 收邮件），老的 Sendmail 因为配置复杂、漏洞多，现在基本全淘汰了。
+3 个核心协议（端口必须记，面试必问）：面试高频题：SMTP、POP3、IMAP 的区别？老手答法：SMTP 是发件协议，端口 25&#x2F;465，负责邮件传输；POP3 和 IMAP 都是收件协议，POP3 下载后服务器默认删除，适合单设备；IMAP 邮件存服务器，多设备同步，是当前主流。
+一封邮件的完整旅程：发件人（test1）→ MUA 写邮件 → 本地 MTA（Postfix） → 查对方域名的 MX 记录 → 送到收件人 MTA → 收件人 MTA 交给 MDA 存到邮箱 → 收件人（test2）用 MUA 通过 IMAP&#x2F;POP3 取邮件。
+6.5.2. 发送命令格式1.普通告警通知echo &quot;磁盘使用率超过85%，请及时清理！服务器：192.168.1.20&quot; | mail -s &quot;【告警】磁盘空间不足&quot; ops@company.com2.带附件：发日志、报表、备份结果echo &quot;今日数据库备份完成，详情见附件&quot; | mail -s &quot;【日报】MySQL备份结果&quot; -a /data/backup/backup.log ops@company.com3.发给多个人 + 抄送echo &quot;服务重启完成，已恢复正常&quot; | mail -s &quot;【恢复】订单服务重启通知&quot; -c leader@company.com ops1@company.com ops2@company.com日志查询：tail -f /var/log/maillog
+
+6.5.3. 邮件发送报警设置mailx 只是个 “写信递信的工具”，它自己不负责长途送信，而是把邮件交给正规的 SMTP 邮件服务器（比如企业邮箱、163&#x2F;QQ 邮箱）去发。
+#1.服务端配置邮件功能[root@backup /]# yum install mailx ‐y[root@backup /]# vim /etc/mail.rc# 发件人邮箱（必须和下面的smtp用户一致）set from=253097001@qq.com# QQ邮箱SMTP服务器地址 + 端口465（SSL安全加密，必须用smtps://）set smtp=smtps://smtp.qq.com:465# SMTP登录账号（就是你的QQ邮箱）set smtp-auth-user=253097001@qq.com# SMTP授权码（注意：不是QQ密码，是QQ邮箱开启POP3/SMTP后生成的【客户端授权码】）set smtp-auth-password=#客户端授权码# SMTP认证方式（固定login即可）set smtp-auth=login# 忽略SSL证书验证（解决SSL不通过导致发邮件失败）set ssl-verify=ignore# 指定SSL证书数据库目录（Linux系统默认路径，保证邮件加密正常工作）set nss-config-dir=/etc/pki/nssdb/#2.服务端校验、以及邮件通知脚本[root@backup ~]# mkdir /server/scripts ‐p[root@backup ~]# vim /server/scripts/check_backup.sh#!/usr/bin/bash#1.定义全局的变量export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin#2.定义局部变量Path=/backupDate=$(date +%F)#3.查看flag文件,并对该文件进行校验, 然后将校验的结果保存至result_时间find $Path/ ‐type f ‐name &quot;flag_$Date&quot;|xargs md5sum ‐c &gt;$Path/result_$&#123;Date&#125;#4.将校验的结果发送邮件给管理员mail ‐s &quot;Rsync Backup $Date&quot; 123@qq.com &lt;$Path/result_$&#123;Date&#125;#5.删除超过7天的校验结果文件, 删除超过180天的备份数据文件find $Path/ ‐type f ‐name &quot;result*&quot; ‐mtime +7|xargs rm ‐ffind $Path/ ‐type d ‐mtime +180|xargs rm ‐rf
+
+6.5.4. 补充：解决报错能发送，但是报错：Error in certificate: Peer’s certificate issuer is not recognized.mailx 底层靠 NSS 库做 SSL 证书校验，你只写了ssl-verify&#x3D;ignore但没指定 NSS 证书目录，校验规则没生效，还是会拦截证书不信任的连接。
+方案一：直接给 mailx 指定一个初始化过的 NSS 证书目录，配合忽略校验，彻底跳过证书验证，发告警完全够用。
+1.先装依赖工具（缺certutil命令会失败）yum install nss-tools -y2.创建证书目录并初始化 NSS 数据库mkdir -p /root/.certscertutil -N -d /root/.certs --empty-password3.编辑/etc/mail.rc，在你原有配置末尾补全这 2 行（缺一个都不行）set ssl-verify=ignoreset nss-config-dir=/root/.certs4.重新发测试邮件echo &quot;cheshi demo linux&quot; | mail -s &quot;biaotishezhi&quot; xuanfenggamer@163.com
+
+方案二：正规解法（导入证书，生产更规范）把 163 邮箱的 SSL 证书导入系统信任库，从根源消除报错，没有任何警告。适合对合规、干净日志有要求的场景。
+1.拉取 163 SMTP 服务器的证书文件echo -n | openssl s_client -connect smtp.163.com:465 | sed -ne &#x27;/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p&#x27; &gt; /root/.certs/163.crt2.将证书导入 NSS 库并标记为信任certutil -A -n &quot;163 SMTP CA&quot; -t &quot;C,,&quot; -d /root/.certs -i /root/.certs/163.crt3.配置文件保留set nss-config-dir=/root/.certs即可，后续发邮件不会再报任何证书相关错误。
+
+
+
+
+
+7. 杂项补充7.1.1. 命令行常用快捷键ctrl+c   # 强制结束当前的操作ctrl+l   # 清屏ctrl+a   # 快速移动光标到行首 Homectrl+e   # 快速移动光标到行尾 Endctrl+← → # 移动一个单词ctrl+u   # 剪切光标所在到行首ctrl+y   # 粘贴剪切的内容ctrl+v 	 # 块模式 批量选中shift+v	 # 批量选择行这是图片中 Linux 终端常用快捷键 的整理内容：光标移动Ctrl + A：光标跳到行首Ctrl + E：光标跳到行尾Ctrl + ←：向左跳一个单词Ctrl + →：向右跳一个单词删除清空Ctrl + U：清空光标前面所有内容Ctrl + K：清空光标后面所有内容Ctrl + W：向左删除一个单词历史命令Ctrl + R：搜索历史命令（最常用）Ctrl + P：上一条命令（等同 ↑ 键）Ctrl + N：下一条命令（等同 ↓ 键）暂停退出Ctrl + C：强制终止当前程序Ctrl + Z：暂停程序丢后台，fg 切回前台Ctrl + D：退出终端 / 退出登录Ctrl + L：清屏（等同 clear 命令）粘贴复制Ctrl + Shift + C：复制Ctrl + Shift + V：粘贴这些快捷键能帮你大幅提升效率。需要我挑几个最常用的，给你出几道实操题练练手吗？
+
+7.2. bash颜色提示-p  显示提示文字-r  原样读取（不乱吃 \ 反斜杠）-rp 最常用，一起写 \033[数字m    表示“开始设置颜色”\033[0m      表示“结束颜色，恢复默认”\033[34m 1.包子 \033[0m从这里开始变蓝色 → 显示 “1. 包子” → 恢复默认颜色30 黑31 红32 绿33 黄34 蓝35 紫36 青37 白\033[31m 红色\033[32m 绿色\033[33m 黄色\033[34m 蓝色echo -e &quot;\033[31m 红色 \033[0m&quot;echo -e &quot;\033[32m 绿色 \033[0m&quot;echo -e &quot;\033[33m 黄色 \033[0m&quot;echo -e &quot;\033[34m 蓝色 \033[0m&quot;echo -e &quot;\033[35m 紫色 \033[0m&quot;echo -e &quot;\033[36m 青色 \033[0m&quot;
+
+
+7.3. echo命令总结颜色输出：30 黑|31 红|32 绿|33 黄|34 蓝|35 紫|36 青|37 白\033[数字m    表示“开始设置颜色”\033[0m      表示“结束颜色，恢复默认”\033[34m 显示文字 \033[0m从这里开始变蓝色 → 显示 “1. 包子” → 恢复默认颜色-------------------------------------------------------------------------序列使用：数字序列：[root@oldboyedu ~]# echo &#123;1..10&#125;1 2 3 4 5 6 7 8 9 10[root@oldboyedu ~]# echo &#123;1..10..2&#125;1 3 5 7 9[root@oldboyedu ~]# echo &#123;01..10&#125;01 02 03 04 05 06 07 08 09 10字母序列：[root@oldboyedu ~]# echo &#123;a..z&#125;a b c d e f g h i j k l m n o p q r s t u v w x y z[root@oldboyedu ~]# echo &#123;a..z..2&#125;a c e g i k m o q s u w y拼接：[root@oldboyedu ~]# echo A&#123;1..3&#125;A1 A2 A3[root@oldboyedu ~]# echo &#123;1..3&#125;A1A 2A 3A[root@oldboyedu ~]# touch &#123;1..3&#125;.txtfor f in &#123;1..3&#125;.txt; do echo &quot;This is $f&quot; &gt; &quot;$f&quot;; done-------------------------------------------------------------------------echo 字符串         ## 输出到屏幕echo 字符串 &gt; 文件   ## 输出到文件 &gt; 先清空后写入| &gt;&gt; 追加内容到文件的末尾常用参数：-e：转义字符的解析，不加就直接当成字符处理[root@oldboyedu ~]# echo -e &quot;oldboy\ntest&quot;oldboytest-n：不自动换行（-n）echo -n &quot;请输入：&quot;-------------------------------------------------------------------------打印环境变量：echo $PATHecho $HOMEecho $PWD打印空格：echo
+
+7.4. linux重定向输出的总结&gt;      标准正确输出重定向     只接受正确的结果&gt;&gt;     标准正确追加输出重定向  只接受正确的结果2&gt;     标准错误输出重定向     只接收错误的结果2&gt;&gt;    标准错误追加输出重定向  只接受错误的结果理解：Linux 系统在执行命令时，默认会关联 3 个基础文件描述符（用于数据输入输出的标识），重定向的本质就是改变这些数据的默认流向（默认流向是终端屏幕）：- 标准输入（stdin）：文件描述符 0，默认从键盘获取输入- 标准正确输出（stdout）：文件描述符 1，命令执行成功后的正常结果，默认输出到终端&gt;：    等价于 1&gt;，覆盖式重定向标准正确输出，目标文件不存在则自动创建，存在则清空原有内容后写入新结果。&gt;&gt;：   等价于 1&gt;&gt;，追加式重定向标准正确输出，目标文件不存在则自动创建，存在则在文件末尾追加新结果，不覆盖原有内容。标准错误输出（stderr）：文件描述符 2，命令执行失败后的错误信息（如文件不存在、权限不足），默认输出到终端。2&gt;：覆盖式重定向标准错误输出，仅收集错误信息，处理逻辑同 &gt;2&gt;&gt;：追加式重定向标准错误输出，仅收集错误信息，处理逻辑同 &gt;&gt;补充企业高频用法：&amp;&gt;（覆盖）、&amp;&gt;&gt;（追加），可同时收集标准正确输出和标准错误输出；另外 2&gt;&amp;1 表示将标准错误输出重定向到标准正确输出（常配合 &gt;&gt; 使用）。举例说明：# 追加当前时间到 time_record.txt 末尾（格式：年-月-日 时:分:秒）date &quot;+%Y-%m-%d %H:%M:%S&quot; &gt;&gt; time_record.txt核心场景：这是生产环境记录定时任务、脚本运行日志的最常用方式，避免覆盖历史日志-----------------------------------------------# 覆盖写入错误信息到 error.logls -l /nonexistent_dir 2&gt; error.log-----------------------------------------------追加式错误：# 第一次错误：删除不存在的文件，追加错误信息rm -rf /nonexistent_file 2&gt;&gt; error_history.log# 第二次错误：创建无权限的目录，继续追加错误信息mkdir /root/test/nonexistent 2&gt;&gt; error_history.log# 验证结果：查看所有追加的错误信息cat error_history.log-----------------------------------------------企业高频补充：同时收集正确和错误输出，追加式# 方式 1：&amp;&gt;&gt; 直接追加正确+错误输出到 app_start.log（推荐）sh /data/app/start.sh &amp;&gt;&gt; /data/logs/app_start.log# 方式 2：&gt;&gt; 配合 2&gt;&amp;1，实现相同追加效果（面试高频考点，需掌握） 固定格式：错误的、正确的都放到一样 同样的位置2 1sh /data/app/start.sh &gt;&gt; /data/logs/app_start.log 2&gt;&amp;1# 验证结果：查看日志文件（无论脚本运行成功或失败，均有对应记录）cat /data/logs/app_start.log补充：若需覆盖式收集，可使用 sh /data/app/start.sh &amp;&gt; /data/logs/app_start.log-----------------------------------------------屏蔽无关错误信息（重定向到 /dev/null）# 查找 7 天前的 Nginx 日志并删除，屏蔽「文件不存在」等无关错误find /var/log/nginx/ -name &quot;*.log&quot; -mtime +7 -delete 2&gt; /dev/null
+
+
+7.5. MD5校验MD5 是一种单向哈希算法，任意数据进去，出来一个 128 位的固定长度“指纹”（32 个十六进制字符），不可逆。主要用来校验完整性，不是加密。
+场景 1：文件完整性校验（最最常用，永不过时）# 生成文件的 MD5 值md5sum 软件包.tar.gz# 输出：e4d909c290d0fb1ca068ffaddf22cbd0  软件包.tar.gz# 把官方给的 MD5 值存成文件，然后校验echo &quot;e4d909c290d0fb1ca068ffaddf22cbd0  软件包.tar.gz&quot; &gt; md5.txtmd5sum -c md5.txt# 输出：软件包.tar.gz: OK一般这么命令，然后下载都要下载：nginx-1.24.0.tar.gz        （真正要用的安装包）nginx-1.24.0.tar.gz.md5    （专门存 MD5 值的小文件）举例：#!/bin/bash# 在源机器 A 上生成备份文件mysqldump -u root mydb &gt; /backup/mydb_$(date +%F).sql# 算这个备份文件的 MD5，并自动存到一个小文件里md5sum /backup/mydb_$(date +%F).sql &gt; /backup/mydb_$(date +%F).sql.md5# 把备份文件和它的 md5 文件一起传到 B 机器scp /backup/mydb_$(date +%F).sql* user@B:/backup/# 在 B 机器上自动校验ssh user@B &quot;cd /backup &amp;&amp; md5sum -c mydb_$(date +%F).sql.md5&quot;
+
+
+7.6. 命令补充sort：#排序-n：按数值排序（2 排在 10 前，没有的话 10 在 2 前）。-r：降序。-t 和 -k：指定分隔符和列，例如 -t&#x27;:&#x27; -k3 按冒号分隔后的第3列排序。-h：人类可读大小排序，能识别 1K, 2M, 3G。-u：排序并去重，等同于 sort | uniq，但更省进程-m：合并多个已排序文件，不重复排序，常用于处理分片日志。举例说明：Nginx 被攻击，找出访问最凶的 IP：awk &#x27;&#123;print $1&#125;&#x27; access.log | sort | uniq -c | sort -nr | headuniq： #只合并相邻的重复行，所以几乎永远和 sort 组合使用。-c：在行首显示重复次数。-d：只显示有重复的行。-u：只显示没有重复的行（出现唯一）。history：history：列出当前会话 + 历史记录中的所有命令。history 20：最近 20 条。!123：重新执行编号 123 的命令。!!：执行上一条命令（sudo 忘记加时尤其好用：sudo !!）。!$：上条命令的最后一个参数，比如 mkdir /opt/newdir 后 cd !$。交互搜索：Ctrl+R，输入关键字，再按一次 Ctrl+R 往更早翻。less： # 查大文件  不用cat空格：向下翻一页b：向上翻一页/关键字：向下搜索?关键字：向上搜索n：下一个匹配项N：上一个匹配项g：跳到文件开头G：跳到文件末尾F：进入实时跟踪模式（等效 tail -f），按 Ctrl+C 退出跟踪，回到浏览模式。q：退出tail:tail -f：根据文件描述符跟踪，文件内容被追加时显示新内容。但如果文件被删掉或 logrotate 轮转了，它还会傻傻盯着原来的 inode，新日志就看不到了。tail -F（大写 F）：根据文件名跟踪，如果文件被轮转、压缩、重新创建，它能自动切到新文件，生产环境监控日志的首选。tail -F /var/log/nginx/access.log          # 一直跟踪，轮转也不怕tail -n 50 -F app.log                      # 先打印最后50行，再跟踪tail -F app.log | grep --color &quot;ERROR&quot;     # 实时高亮错误wc:wc -l      # 行数（最常用）wc -w      # 单词数wc -c      # 字节数wc -m      # 字符数（多字节语言时与 -c 不同）-----------------------------------------------------------------curl命令：# curl = 用命令行&quot;发请求、收响应&quot;，能模拟浏览器/客户端去访问 URL、调 API、下文件参数表：-X	request	指定方法：GET/POST/PUT/DELETE（默认 GET）-d	data	POST 的请求体数据（自动变 POST）-H	header	加请求头，可多个：-H &#x27;Content-Type: application/json&#x27;-i	include	响应里带上响应头一起显示-I	head	只看响应头（发 HEAD 请求，不看 body，测连通/看状态码神器）-o	output	保存到文件，自己起文件名：-o a.html-O	remote-name	保存到文件，用服务器上的原文件名-L	location	跟随重定向（301/302 自动跳，不加就停在跳转页）-s	silent	静默，不显示进度条（脚本里常用）-S	show-error	配合 -s，静默但出错时仍报错-k	insecure	忽略 SSL 证书校验（自签证书/内网 https 时用，生产对外别乱用）-v	verbose	详细调试，把请求头/响应头/握手过程全打印（排查接口神器）-F	form	表单上传，含文件：-F &#x27;file=@a.png&#x27;-u	user	用户名:密码 认证：-u admin:123-b	cookie	带 cookie：-b &#x27;sid=xxx&#x27; 或 -b cookie.txt-c	cookie-jar	把服务器返回的 cookie 存文件--connect-timeout	连接超时（秒）	连不上的快速失败，防脚本卡死-m / --max-time	总超时（秒）	整个请求最长多久--compressed	要求压缩传输	让服务器返回 gzip，省流量举例说明：场景1：测接口通不通 / 看状态码curl -I https://www.baidu.com      # 只看头，第一行 HTTP/1.1 200 OK 就是通的# curl -o /dev/null -s -w &quot;%&#123;http_code&#125;&quot; 这串是健康检查脚本的黄金句式：丢弃 body、静默、只输出状态码，方便 if 判断。curl -o /dev/null -s -w &quot;%&#123;http_code&#125;\n&quot; https://xxx   # 只打印状态码（监控脚本常用）场景2：GET 请求（默认就是 GET）curl https://api.example.com/users/1curl -s https://api.example.com/users | jq .     # 配 jq 把 json 格式化（神器，扩展见下）场景3：POST 提交 JSON（调接口最常见）curl -X POST https://api.example.com/users \     -H &#x27;Content-Type: application/json&#x27; \     -d &#x27;&#123;&quot;name&quot;:&quot;张三&quot;,&quot;age&quot;:28&#125;&#x27;场景4：下载文件curl -O https://example.com/file.tar.gz       # 用原文件名保存curl -o my.tar.gz https://example.com/x.gz    # 自己起名curl -L -O https://short.url/xxx              # 短链/会跳转的，加 -L场景5：内网自签 https / 跟随跳转 / 调试curl -k https://10.0.0.5:8443/api      # 自签证书，-k 跳过校验curl -L http://old.com                 # 跟随 301/302# -v 是 curl 的灵魂调试开关。 接口报 401/403/证书错/重定向死循环，先 curl -v 看完整握手和头，问题基本现形。curl -v https://api.example.com        # 排查&quot;为啥不通/为啥401&quot;，-v 把全过程吐出来【扩展：curl 还能测端口连通性】curl -v telnet://10.0.0.5:3306      # 测 3306 端口通不通curl -v telnet://10.0.0.5:6379【扩展：jq —— curl 的最佳搭档】curl -s https://api.example.com/users | jq .          # 格式化curl -s https://api.example.com/users | jq &#x27;.[0].name&#x27;  # 取第一个用户的 name-----------------------------------------------------------------wget命令：# 调接口 / 健康检查 / 看响应头 / 管道处理 JSON  →  curl# 下载安装包 / 拉备份 / 断点续传大文件 / 扒站    →  wgetwget大部分命令和curl相同，这里只说明wget独有的：1.断点续传（wget 的杀手锏）：wget -c https://mirror.example.com/mysql-8.0.36.tar.gz2.递归下载 / 扒站（curl 完全做不到）：# 递归下载某目录下所有文件（不跳出该目录）# 参数拆解：#   -r     recursive，递归#   -np    no-parent，不爬到上级目录（防止把整站都拉了）#   -nH    no-host-directories，不建 &quot;repo.example.com&quot; 这层目录wget -r -np -nH https://repo.example.com/packages/# 只下特定类型#   -A    accept，只要 .rpm 文件（-R 是 reject 排除）wget -r -np -nH -A &quot;*.rpm&quot; https://repo.example.com/packages/# 完整镜像一个网站到本地（离线浏览）#   -m    mirror（= -r -N -l inf --no-remove-listing）#   -k    convert links，把链接改成本地相对路径（离线能点开）#   -p    page-requisites，连 css/js/图片一起拉wget -m -k -p https://docs.example.com/3.后台下载（不占终端）：wget -b https://mirror.example.com/huge-file.iso# -b = background，立刻返回，后台默默下# 日志写到 wget-log，随时 tail -f wget-log 看进度4.设置下载目录：#  -P = directory-prefix，指定存到哪个目录wget -P /data/downloads https://example.com/file.tar.gz]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Linux</tag>
+      </tags>
+  </entry>
 </search>
