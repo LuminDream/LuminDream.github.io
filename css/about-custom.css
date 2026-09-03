@@ -1,0 +1,266 @@
+/* ========================================
+   关于我 - 简历风格排版（个人主页向）
+   ======================================== */
+
+#article-container.about-resume {
+  padding: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.resume-wrapper {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 10px 20px 50px;
+}
+
+/* ===== 顶部区域 ===== */
+.resume-header {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  padding: 30px 0 28px;
+  border-bottom: 2px solid #49b1f5;
+  margin-bottom: 28px;
+}
+
+.resume-avatar-wrap {
+  flex-shrink: 0;
+}
+
+.resume-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid #49b1f5;
+  box-shadow: 0 4px 20px rgba(73,177,245,0.25);
+  display: block;
+  background: #49b1f5;
+}
+
+.resume-header-info {
+  flex: 1;
+}
+
+.resume-name {
+  font-size: 2em;
+  font-weight: 800;
+  margin: 0 0 8px;
+  color: var(--font-color, #363636);
+  line-height: 1.2;
+}
+
+.resume-subtitle {
+  font-size: 1.05em;
+  color: #49b1f5;
+  margin: 0 0 14px;
+  font-weight: 500;
+}
+
+.resume-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  font-size: 0.93em;
+  color: var(--font-color, #555);
+}
+
+.resume-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ===== 板块标题 ===== */
+.block {
+  margin-bottom: 26px;
+}
+
+.block-title {
+  font-size: 1.15em;
+  font-weight: 700;
+  margin: 0 0 14px;
+  padding: 0 0 8px 0;
+  border-bottom: 2px solid #49b1f5;
+  color: var(--font-color, #363636);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ===== 教育背景（一行） ===== */
+.edu-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 0.95em;
+  color: var(--font-color, #444);
+  line-height: 1.8;
+}
+
+.edu-line .school {
+  font-weight: 700;
+  font-size: 1.05em;
+  color: var(--font-color, #363636);
+}
+
+.edu-line .sep {
+  color: #ccc;
+}
+
+.edu-line .year {
+  color: #49b1f5;
+  font-weight: 600;
+}
+
+/* ===== 技能区域 ===== */
+.skill-group {
+  margin-bottom: 16px;
+}
+
+.skill-group:last-child {
+  margin-bottom: 0;
+}
+
+.skill-group-head {
+  font-size: 0.98em;
+  font-weight: 700;
+  color: #49b1f5;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.skill-group-head::before {
+  content: '';
+  width: 4px;
+  height: 16px;
+  background: #49b1f5;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.skill-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 0.9em;
+  line-height: 1.75;
+  color: var(--font-color, #444);
+}
+
+.skill-label {
+  font-weight: 700;
+  min-width: 110px;
+  flex-shrink: 0;
+  color: var(--font-color, #363636);
+  white-space: nowrap;
+}
+
+.skill-desc {
+  flex: 1;
+}
+
+/* ===== 兴趣标签 ===== */
+.tags-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tag-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 0.9em;
+  font-weight: 600;
+  background: rgba(73,177,245,0.1);
+  color: #49b1f5;
+  border: 1px solid rgba(73,177,245,0.3);
+  transition: all 0.25s ease;
+  cursor: default;
+}
+
+.tag-item:hover {
+  background: #49b1f5;
+  color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(73,177,245,0.3);
+}
+
+/* ===== 联系方式 ===== */
+.contact-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.contact-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 22px;
+  border-radius: 8px;
+  font-size: 0.9em;
+  font-weight: 600;
+  text-decoration: none !important;
+  background: rgba(73,177,245,0.1);
+  color: #49b1f5 !important;
+  border: 1px solid rgba(73,177,245,0.3);
+  transition: all 0.25s ease;
+}
+
+.contact-btn:hover {
+  background: #49b1f5;
+  color: #fff !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(73,177,245,0.3);
+}
+
+/* ===== 暗色模式适配 ===== */
+[data-theme="dark"] .resume-name,
+[data-theme="dark"] .block-title,
+[data-theme="dark"] .edu-line .school,
+[data-theme="dark"] .skill-label {
+  color: #e8e8e8;
+}
+
+[data-theme="dark"] .skill-row,
+[data-theme="dark"] .edu-line,
+[data-theme="dark"] .resume-meta {
+  color: #c8c8c8;
+}
+
+[data-theme="dark"] .edu-line .sep {
+  color: #555;
+}
+
+[data-theme="dark"] .tag-item,
+[data-theme="dark"] .contact-btn {
+  background: rgba(73,177,245,0.15);
+  border-color: rgba(73,177,245,0.35);
+}
+
+/* ===== 移动端 ===== */
+@media (max-width: 768px) {
+  .resume-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 18px;
+  }
+  .resume-meta {
+    justify-content: center;
+  }
+  .skill-row {
+    flex-direction: column;
+    gap: 1px;
+  }
+  .skill-label {
+    min-width: auto;
+  }
+}

@@ -1,0 +1,198 @@
+/* ============================================
+   森林绿主题皮肤 v3（自定样式层）
+   配色思路：模块底色使用与绿色搭配的中性色
+     - 白天：暖米白（页面底暖米灰），绿只作边框/图标点缀
+     - 夜晚：炭灰蓝黑，点缀灰蓝，避免整站发绿
+   2. 侧栏位置：文章阅读页（post）在右，其他页面在左
+   说明：此文件通过 _config.butterfly.yml 的 inject.head 注入，
+   不修改主题源码，主题升级后依然生效。
+   ============================================ */
+
+/* ---------- 白天模式：暖米白系（绿做点缀） ---------- */
+:root {
+  --global-bg: #ede9dc;            /* 页面底色 - 加深的暖米灰 */
+  --card-bg: #f6f2e6;              /* 模块底色 - 加深的暖米白 */
+  --card-meta: #6b7280;            /* 卡片元信息 - 中性灰 */
+  --sidebar-bg: #f6f2e6;           /* 移动端菜单背景 */
+  --sidebar-menu-bg: #f6f2e6;
+  --search-bg: #f6f2e6;            /* 搜索弹层背景 */
+  --zoom-bg: #f6f2e6;              /* 灯箱/放大背景 */
+  --card-box-shadow: 0 3px 8px 6px rgba(96, 100, 90, .06);       /* 阴影 - 中性微暖 */
+  --card-hover-box-shadow: 0 3px 8px 6px rgba(58, 125, 68, .12); /* hover - 呼应主色 */
+}
+
+/* ---------- 夜晚模式：炭灰蓝黑系（点缀灰蓝） ---------- */
+[data-theme="dark"] {
+  --global-bg: #16181d;            /* 页面底色 - 炭灰蓝黑 */
+  --card-bg: #1e2228;              /* 模块底色 - 炭灰蓝黑 */
+  --card-meta: #9aa3ad;
+  --sidebar-bg: #1e2228;
+  --sidebar-menu-bg: #262b33;
+  --search-bg: #1e2228;
+  --zoom-bg: #1e2228;
+  --card-box-shadow: 0 3px 8px 6px rgba(0, 0, 0, .30);
+  --card-hover-box-shadow: 0 3px 8px 6px rgba(120, 140, 175, .16); /* hover 蓝灰微光 */
+}
+
+/* ---------- 卡片点缀（小面积，不喧宾夺主） ---------- */
+.card-widget,
+.layout > div:first-child:not(.nc) {
+  border: 1px solid rgba(58, 125, 68, .14);   /* 白天淡绿边框呼应主色 */
+}
+
+.card-widget .item-headline {
+  border-bottom: 1px dashed rgba(58, 125, 68, .20);
+}
+
+.card-widget .item-headline i {
+  color: #3a7d44;
+}
+
+[data-theme="dark"] .card-widget,
+[data-theme="dark"] .layout > div:first-child:not(.nc) {
+  border-color: rgba(126, 146, 180, .22);    /* 夜晚灰蓝边框 */
+}
+
+[data-theme="dark"] .card-widget .item-headline i {
+  color: #8aa0bb;                            /* 夜晚灰蓝图标 */
+}
+
+/* ---------- 侧栏位置：文章阅读页在右，其他页面在左 ---------- */
+/* 文章页保持主题默认（侧栏右）：body-wrap class="post" 无需额外规则
+   其他页面（首页/归档/分类/标签/独立页）：body-wrap class="page" */
+@media (min-width: 900px) {
+  #body-wrap.page .layout > div:first-child {
+    order: 2;              /* 主内容移到视觉右侧 → 侧栏回到左侧 */
+  }
+
+  #body-wrap.page #aside-content {
+    padding-left: 0;       /* 覆盖主题 right 模式的左边距 */
+    padding-right: 15px;   /* 侧栏在左时需要的右边距 */
+  }
+}
+
+/* ---------- 文章页 meta：4 项（发表于/分类/字数/时长）一行排列 ---------- */
+#post-info #post-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+#post-info #post-meta > .meta-firstline,
+#post-info #post-meta > .meta-secondline {
+  display: contents;       /* 去掉两个 div 的块级换行，全部 span 并入同一行 */
+}
+
+/* 恢复第二行首分隔符（主题在 ≥768px 将其隐藏，合并一行后需要它衔接分类） */
+@media (min-width: 768px) {
+  #post-info #post-meta > .meta-secondline > span:first-child {
+    display: inline;
+  }
+}
+
+/* ---------- 随笔页（/essay/）自定义排版 ---------- */
+#article-container.essay-page {
+  padding: 40px 40px 30px;
+}
+
+.essay-hero {
+  padding: 20px 0 26px;
+  border-bottom: 1px solid rgba(58, 125, 68, .18);
+  margin-bottom: 26px;
+}
+
+.essay-hero-title {
+  font-size: 1.7em;
+  font-weight: 700;
+  color: #3a7d44;
+  margin: 0 0 10px;
+}
+
+.essay-hero-sub {
+  color: #8a8f88;
+  font-size: 0.95em;
+  margin: 0;
+}
+
+.essay-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.essay-card {
+  display: block;
+  padding: 22px 26px;
+  border: 1px solid rgba(58, 125, 68, .18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .35);
+  transition: all .3s;
+  text-decoration: none !important;
+}
+
+[data-theme="dark"] .essay-card {
+  background: rgba(255, 255, 255, .03);
+}
+
+.essay-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(58, 125, 68, .12);
+  border-color: rgba(58, 125, 68, .38);
+}
+
+.essay-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.essay-card-tag {
+  display: inline-block;
+  padding: 2px 12px;
+  border-radius: 12px;
+  font-size: 0.8em;
+  color: #fff;
+  background: #3a7d44;
+}
+
+.essay-card-date {
+  font-size: 0.85em;
+  color: #9aa09a;
+}
+
+.essay-card-title {
+  font-size: 1.15em;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: #363c36;
+}
+
+[data-theme="dark"] .essay-card-title {
+  color: #e6ebe6;
+}
+
+.essay-card-desc {
+  font-size: 0.92em;
+  line-height: 1.8;
+  color: #6b7270;
+  margin: 0 0 10px;
+}
+
+[data-theme="dark"] .essay-card-desc {
+  color: #a8b0aa;
+}
+
+.essay-card-more {
+  font-size: 0.88em;
+  color: #3a7d44;
+  font-weight: 600;
+}
+
+.essay-empty-tip {
+  margin-top: 26px;
+  text-align: center;
+  color: #b0b6b0;
+  font-size: 0.88em;
+  letter-spacing: .3em;
+}
