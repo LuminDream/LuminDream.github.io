@@ -1,3 +1,7 @@
 User-agent: *
 Allow: /
+Disallow: /archives/
+Disallow: /page/
+
 Sitemap: https://www.lumindream.site/sitemap.xml
+Sitemap: https://www.lumindream.site/baidusitemap.xml
