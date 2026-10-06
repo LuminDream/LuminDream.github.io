@@ -1,6 +1,2259 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>Ansible Playbook 与变量体系实战</title>
+    <url>/2024/07/16/AnsiblePlaybook%E4%B8%8E%E5%8F%98%E9%87%8F%E4%BD%93%E7%B3%BB%E5%AE%9E%E6%88%98/</url>
+    <content><![CDATA[Ansible Playbook 与变量体系实战ad-hoc 命令解决”临时干一票”的问题，但真正要重复用的东西必须落成 playbook。我写第一个剧本时的最大困惑不是语法，而是变量：同一个值，写在剧本里、写在清单里、用 -e 传进来，到底谁说了算？这篇把 playbook 的基础和变量体系一起理清楚——变量搞明白了，剧本才谈得上复用。
+一、Playbook 是什么Playbook（剧本）是 Ansible 的编排文件，核心就两个概念：
+
+play：定义”在哪批主机上执行”，对应 hosts；
+task：定义”具体做什么”，一条 task 调一个模块。
+
+一个 playbook 可以包含多个 play，一个 play 可以包含多个 task。和 ad-hoc 的区别：ad-hoc 是一条命今一次执行，playbook 有明确的执行顺序和依赖关系，而且可以持久保存、重复执行。
+二、YAML 语法速记剧本用 YAML 写，语法规则不多，但每条都必须严守，而且错得悄无声息（缩进错了直接语法报错，写错了往往不报错但行为不对）：
+
+只用空格缩进，绝对不能用 Tab；
+同层级左对齐，一层缩进 2 个空格；
+冒号后面必须有一个空格：name: wget，写 name:wget 会解析成字符串；
+大小写敏感，Ansible 的关键字全是小写；
+注释用 #；
+开头 --- 标识 YAML 文档。
+
+两种核心结构：字典（键值对）和列表（-  开头）。写多行内容用 | 保留换行，配配置文件时常用：
+- name: 写入 nginx 默认站点配置  ansible.builtin.copy:    content: |      server &#123;          listen 80;          server_name localhost;          root /usr/share/nginx/html;      &#125;    dest: /etc/nginx/conf.d/default.conf
+
+三、第一个剧本与语法检查---- hosts: prod_web            # 在哪些主机执行  remote_user: root          # 用什么用户执行  tasks:    - name: 安装基础软件包      yum:        name: &quot;&#123;&#123; yum_items &#125;&#125;&quot;        state: present      vars:        yum_items:          - wget          - lrzsz
+
+写完先别执行，跑一遍语法检查：
+ansible-playbook --syntax-check install_base.yml
+
+--syntax-check 只检查语法不连远端，顺手还能用 -C（干跑）模拟执行看变更范围。这两个参数我建议当成剧本的”编译检查”来用，尤其是改高危剧本的时候。
+四、变量定义在哪里，谁说了算变量定义的位置有四种，优先级从低到高：
+Inventory 文件里的变量  &lt;  playbook 里的 vars / vars_files  &lt;  命令行 -e 传入
+
+最常见的是 playbook 里定义：
+# 方式一：列表变量，适合一组软件包- hosts: web_group  vars:    packages:      - httpd      - mariadb-server      - php  tasks:    - name: 安装 LAMP 组件      yum:        name: &quot;&#123;&#123; packages &#125;&#125;&quot;
+
+# 方式二：vars_files 外部文件，多个剧本共享- hosts: web_group  vars_files:    - ./vars/webserver.yml  tasks:    - name: 安装 web 组件      yum:        name: &quot;&#123;&#123; web_server &#125;&#125;&quot;
+
+vars_files 是比 vars 更工程化的做法——同一个变量文件可以被多个剧本引用，改版本号只改一处。再进一步就是分层变量：
+# vars_file.yml 里按业务分层lamp:  framework:    web_package: httpd    db_package: mariadb-server    php_package: phplnmp:  framework:    web_package: nginx    db_package: mysql    php_package: php
+
+# 引用时两种写法，推荐后者（官方写法，键名有特殊字符也不怕）name: &quot;&#123;&#123; lamp.framework.web_package &#125;&#125;&quot;name: &quot;&#123;&#123; lamp[&#x27;framework&#x27;][&#x27;web_package&#x27;] &#125;&#125;&quot;
+
+命令行传入变量用于临时覆盖（换环境、换版本）：
+ansible-playbook deploy.yml -e &quot;web_server=nginx&quot; -e &quot;db_server=mariadb-server&quot;
+
+-e 的优先级最高，适合”同一套剧本多环境复用”：剧本里写默认值，执行时按环境覆盖。但要注意它同时也是最容易埋雷的——传错一个变量，剧本会静默用错值跑完，所以我只在明确的场景用，日常变量一律落在文件里。
+五、魔法变量：跨主机协作的钥匙魔法变量和 Inventory 强相关，做批量分组、跨主机协作全靠它们。生产上最常用的五个：
+# 1. inventory_hostname：主机在清单里的名字，做唯一标识- name: 生成带主机标识的备份文件  copy:    content: &quot;config backup&quot;    dest: &quot;/data/backup/&#123;&#123; inventory_hostname &#125;&#125;_conf_bak.tar.gz&quot;# 2. group_names：当前主机属于哪些组，一套剧本适配多角色- name: 只在 web 组装 Nginx  yum:    name: nginx  when: &quot;&#x27;prod_web&#x27; in group_names&quot;# 3. groups：所有组和主机列表，自动生成集群配置#    模板里遍历 web 组，生成负载均衡后端upstream app_backend &#123;&#123;% for host in groups[&#x27;prod_web&#x27;] %&#125;    server &#123;&#123; hostvars[host][&#x27;ansible_default_ipv4&#x27;][&#x27;address&#x27;] &#125;&#125;:8080;&#123;% endfor %&#125;&#125;# 4. hostvars：跨主机取数据，从库配置主库地址就靠它- name: 配置主库地址  lineinfile:    path: /etc/my.cnf    regexp: &#x27;^master_host&#x27;    line: &quot;master_host = &#123;&#123; hostvars[&#x27;db01&#x27;][&#x27;ansible_default_ipv4&#x27;][&#x27;address&#x27;] &#125;&#125;&quot;# 5. inventory_dir：清单所在目录，用来拼相对路径- name: 加载同目录下的业务变量  include_vars:    file: &quot;&#123;&#123; inventory_dir &#125;&#125;/vars/app_config.yml&quot;
+
+hostvars 有一个使用前提：目标主机的 facts 得先采集过。如果 play 里关了 gather_facts，跨主机取到的值可能是空的——这个坑我第一次用模板生成 upstream 时踩得很实，排查半天才发现是 facts 没采。
+六、facts：系统信息自动采集剧本默认会执行 gather_facts，把被控端信息采集到 ansible_facts 里。巡检、按硬件差异化生成配置，都靠它：
+- debug:    msg: &quot;主机名：&#123;&#123; ansible_facts[&#x27;hostname&#x27;] &#125;&#125;&quot;- debug:    msg: &quot;系统：&#123;&#123; ansible_facts[&#x27;distribution&#x27;] &#125;&#125; &#123;&#123; ansible_facts[&#x27;distribution_version&#x27;] &#125;&#125;&quot;- debug:    msg: &quot;内存：&#123;&#123; ansible_facts[&#x27;memtotal_mb&#x27;] &#125;&#125; MB&quot;- debug:    var: ansible_facts[&#x27;mounts&#x27;]
+
+几个高价值的场景：
+# 1. 按系统大类分发包管理器（RedHat 系用 yum，Debian 系用 apt）- name: 安装基础工具（RedHat 系）  yum:    name: [vim, wget, net-tools]  when: ansible_facts[&#x27;os_family&#x27;] == &quot;RedHat&quot;- name: 安装基础工具（Debian 系）  apt:    name: [vim, wget, net-tools]  when: ansible_facts[&#x27;os_family&#x27;] == &quot;Debian&quot;
+
+这里有个常见误区：Ubuntu 的 os_family 是 Debian，不是 Ubuntu。判断系统家族时先想清楚这层关系，条件写错了，剧本在 Ubuntu 上直接跳过安装步骤。
+# 2. 按内存大小生成配置：模板里直接算[mysqld]innodb_buffer_pool_size = &#123;&#123; (ansible_facts[&#x27;memtotal_mb&#x27;] * 0.8) | int &#125;&#125;M
+
+同样一套 MySQL 剧本，撒到 2G、4G、16G 的机器上，配置文件自动适配——这就是”事实驱动”的威力。不用为每种规格写一份剧本。
+七、变量注册：把执行结果接出来模块执行完的返回值想复用，就用 register 接住：
+- hosts: web_group  tasks:    - name: 查看根目录      shell: &quot;ls -l /&quot;      register: list_dir    - name: 输出结果      debug:        msg: &quot;&#123;&#123; list_dir.stdout_lines &#125;&#125;&quot;     # 只要标准输出，干净
+
+技巧在于 stdout_lines：直接 msg: &quot;&#123;&#123; list_dir &#125;&#125;&quot; 会带一堆 return code、耗时之类的杂项，stdout_lines 只取命令输出并按行拆好。之后配合 when: list_dir.rc == 0 之类的判断，就能做出”命令失败则跳过后续”的逻辑。
+八、facts 缓存与执行优化facts 采集需要额外的时间。机器多的时候有两个选择：
+# 选项一：这个 play 不需要系统信息，直接关掉- hosts: web_group  gather_facts: no  tasks: ...
+
+# 选项二：缓存 FACTS，一段时间内复用（生产大环境推荐）gathering = smartfact_caching = jsonfilefact_caching_connection = /tmp/ansible_facts_cachefact_caching_timeout = 86400
+
+判断标准很简单：剧本里用不到 ansible_facts 就关掉；用得到但机器多，就用缓存。
+九、变量优先级的记忆法Ansible 的完整优先级列表有二十多条，背是不现实的。日常工作记住三个原则就够用：
+
+就近原则：越”贴近这台主机”的定义优先级越高——单机变量 &gt; 组变量 &gt; 全局变量；
+外部压内部：命令行 -e 永远最高，用来做环境覆盖；
+all 就是全局默认值：group_vars/all.yml 是所有机器的兜底。
+
+调试变量时有个必会动作：ansible-inventory -i inventories/prod/hosts --host db01，会把这台机器生效的全部变量、以及从哪层继承的，完整列出来。变量不生效的时候，先跑这条命令，比猜快得多。
+小结Playbook 的入门门槛在 YAML 语法，真正拉开差距的是变量。把”会变的东西”从剧本里赶出去——版本号进变量文件、环境差异进 group_vars、临时覆盖走 -e——剧本才能从”这台机器能跑”变成”哪台机器都能跑”。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Ansible</tag>
+        <tag>Playbook</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Ansible Roles 与 Jinja2：部署剧本工程化实战</title>
+    <url>/2024/08/27/AnsibleRoles%E4%B8%8EJinja2%E9%83%A8%E7%BD%B2%E5%89%A7%E6%9C%AC%E5%B7%A5%E7%A8%8B%E5%8C%96/</url>
+    <content><![CDATA[Ansible Roles 与 Jinja2：部署剧本工程化实战单文件剧本写到三百行的时候，问题开始集中爆发：NFS 的部署逻辑和 rsync 的混在同一份文件里，改一处要通读全文；换台机器复用，全靠复制粘贴。后来我把所有剧本按官方的 roles 规范重构了一遍，顺带用 Jinja2 解决了”每台机器配置不一样”的老大难。这篇把重构的思路和三个实战案例整理出来。
+一、为什么要 rolesroles 解决的是解耦：把”装 Nginx””装 MySQL””基础优化”各自拆成独立模块，谁需要就引用谁。
+对比一下两种写法：
+# 重构前：所有步骤堆在一个剧本里deploy_all.yml  ├── 基础优化 30 行  ├── NFS 安装配置 60 行  ├── rsync 安装配置 80 行  └── 应用部署 100 行# 重构后：按角色拆分roles/  ├── base/        # 基础优化  ├── install_nfs/ # NFS  ├── rsync/       # rsync  └── app/         # 应用site.yml           # 一个入口文件把角色串起来
+
+好处很直接：新项目要用基础优化，直接引用 base 角色；改 NFS 的逻辑不会碰到 rsync 的代码。每个角色最好只干一件事，这是 roles 的核心纪律。
+二、Roles 的目录结构每个角色就是一整套标准目录，各目录各司其职：
+roles/install_nfs/├── tasks/main.yml       # 任务清单（核心）├── handlers/main.yml    # 触发器├── templates/exports.j2 # Jinja2 模板（带变量的配置文件）├── files/               # 静态文件（原样分发的）├── vars/main.yml        # 变量├── defaults/main.yml    # 低优先级默认变量├── meta/main.yml        # 依赖关系└── README.md
+
+两个容易混的目录：files/ 放原样分发的文件，templates/ 放要渲染变量的模板（后缀 .j2）。用 copy 模块从 files 取文件，用 template 模块从 templates 取模板，取错目录会直接报找不到文件。
+vars 和 defaults 的区别在优先级：vars/main.yml 优先级高（角色内部用），defaults/main.yml 优先级低（给使用者留的覆盖口子）。对外发布的角色，变量放 defaults 让别人能覆盖；内部实现细节放 vars。
+用命令生成骨架最省事：
+ansible-galaxy init install_nfs
+
+三、Jinja2：让配置文件适配每台机器问题场景：100 台机器要装 Nginx，每台的监听地址、后端节点列表都不一样。把配置文件写死，等于要维护 100 份；用 Jinja2 模板，一份模板渲染出 100 份。
+template 模块和 copy 模块的区别就一句话：template 会解析文件里的变量，copy 原样复制。之前推送 rsync 备份脚本想让脚本里带上主机名，用 copy 推过去就是字面的 &#123;&#123; ansible_fqdn &#125;&#125;，换成 template 才渲染成实际主机名。
+Jinja2 的三种语法：
+&#123;&#123; EXPR &#125;&#125;        输出变量值&#123;% for %&#125;/&#123;% if %&#125; 逻辑控制&#123;# 注释 #&#125;
+
+第一个例子：按机器渲染 motd
+- name: 分发 motd  template:    src: ./motd.j2    dest: /etc/motd
+
+Welcome to &#123;&#123; ansible_fqdn &#125;&#125;This system total mem is: &#123;&#123; ansible_memtotal_mb &#125;&#125; MBThis system free mem is: &#123;&#123; ansible_memfree_mb &#125;&#125; MB
+
+登录每台机器，看到的欢迎语带自己的主机名和实际内存——模板的价值一眼可见。
+第二个例子：for 循环生成负载均衡后端
+upstream &#123;&#123; server_name &#125;&#125; &#123;&#123;% for n in range(21) %&#125;    server 172.18.1.&#123;&#123; n &#125;&#125;:&#123;&#123; up_port &#125;&#125;;&#123;% endfor %&#125;&#125;
+
+配合剧本执行，一份模板直接把整段 upstream 节点列表渲染出来：
+- hosts: lb_group  vars:    http_port: 80    server_name: www.example.com    up_port: 80  tasks:    - name: 渲染负载均衡配置      template:        src: ./www.example.com.conf.j2        dest: /etc/nginx/conf.d/www.example.com.conf      notify: reload nginx  handlers:    - name: reload nginx      systemd:        name: nginx        state: reloaded
+
+生产上更稳的做法是用 groups 遍历主机列表，而不是手写 range——节点增减只改清单，配置自动跟着变。
+第三个例子：if 判断区分主备
+keepalived 的主备配置差异（MASTER&#x2F;BACKUP、优先级）用一段 if 搞定：
+global_defs &#123;    router_id &#123;&#123; ansible_fqdn &#125;&#125;&#125;vrrp_instance VI_1 &#123;&#123;% if ansible_fqdn == &quot;lb01&quot; %&#125;    state MASTER    priority 150&#123;% else %&#125;    state BACKUP    priority 100&#123;% endif %&#125;    interface eth0    virtual_router_id 50    advert_int 1    authentication &#123;        auth_type PASS        auth_pass 1111    &#125;    virtual_ipaddress &#123;        10.0.8.3    &#125;&#125;
+
+一份模板推给两台机器，主备身份自动分配。记住一个限制：Jinja2 的条件和循环只能写在模板文件里，不能写在 playbook 里——playbook 里的逻辑要用 when 和 loop。
+四、实战一：用 roles 重构 NFS 部署ansible-galaxy init install_nfs
+
+# roles/install_nfs/tasks/main.yml---- name: 安装 NFS 服务端  yum:    name: nfs-utils    state: present- name: 渲染 exports 配置  template:    src: exports.j2    dest: /etc/exports  notify: 重启 NFS 服务- name: 创建共享目录  file:    path: &quot;&#123;&#123; share_dir &#125;&#125;&quot;    state: directory    owner: www    group: www    mode: &#x27;0755&#x27;- name: 启动 NFS 服务  systemd:    name: nfs    state: started    enabled: yes
+
+# roles/install_nfs/handlers/main.yml- name: 重启 NFS 服务  systemd:    name: nfs    state: restarted
+
+# roles/install_nfs/templates/exports.j2&#123;&#123; share_dir &#125;&#125; &#123;&#123; share_ip &#125;&#125;(rw,sync,all_squash,anonuid=666,anongid=666)
+
+# roles/install_nfs/vars/main.ymlshare_dir: /datashare_ip: 172.18.1.31
+
+# site.yml：统一入口- name: 部署 NFS 服务端  hosts: &quot;&#123;&#123; target_group | default(&#x27;all&#x27;) &#125;&#125;&quot;   # -e target_group=prod_nfs 指定范围  remote_user: root  roles:    - role: install_nfs      when: &quot;&#x27;nfs01&#x27; in inventory_hostname&quot;  tags: nfs
+
+ansible-playbook -i inventories/prod/hosts -t nfs site.yml
+
+注意上面 share_dir、share_ip 这些变量的用法：任务文件里不写死路径和 IP，全部引用变量，变量值放在 vars 或 group_vars 里。这样做完，同一套角色换个环境只改变量文件。
+五、实战二：rsync 备份服务端 + 客户端这是最典型的一组”服务端配置 + 客户端脚本”的搭档部署：
+# site.yml- hosts: prod_backup  remote_user: root  roles:    - rsync
+
+# roles/rsync/tasks/main.yml- name: 安装 rsync  yum:    name: rsync    state: present- name: 分发配置与认证文件（循环带不同权限）  copy:    src: &quot;&#123;&#123; item.src &#125;&#125;&quot;    dest: &quot;/etc/&#123;&#123; item.dest &#125;&#125;&quot;    mode: &quot;&#123;&#123; item.mode &#125;&#125;&quot;  loop:    - &#123; src: &quot;rsyncd.conf&quot;, dest: &quot;rsyncd.conf&quot;, mode: &quot;0644&quot; &#125;    - &#123; src: &quot;rsync.passwd&quot;, dest: &quot;rsync.passwd&quot;, mode: &quot;0600&quot; &#125;  notify: 重启 rsync 服务- name: 启动 rsync 服务  systemd:    name: rsyncd    state: started    enabled: yes
+
+一个细节值得强调：rsyncd.conf 和 rsync.passwd 的权限不一样，用字典循环把”文件 + 目标 + 权限”打包成一组参数，一个任务搞定。认证文件 0600 是硬要求，rsync 对密码文件权限过宽会直接拒绝启动。
+服务端跑通之后，客户端侧是把备份脚本推下去、加进 crontab：
+# 客户端部分：给 web 机器下发备份脚本和定时任务- hosts: prod_web  tasks:    - name: 下发备份脚本      copy:        src: ./backup.sh        dest: /root/backup.sh        mode: &#x27;0755&#x27;    - name: 添加定时备份任务      cron:        name: &quot;rsync-backup-daily&quot;        user: root        minute: &quot;30&quot;        hour: &quot;1&quot;        job: &quot;/bin/bash /root/backup.sh &gt;&gt; /var/log/backup.log 2&gt;&amp;1&quot;
+
+部署完用 ansible-playbook --syntax-check 过一遍语法，再用 -C 干跑确认变更范围，最后才正式执行——这套”检查三连”用在所有生产剧本上。
+六、实战三：playbook 部署 LAMP最后看一个完整项目：用剧本部署 httpd + PHP + MariaDB + WordPress：
+- hosts: prod_web  tasks:    - name: 安装 LAMP 组件      yum:        name: &quot;&#123;&#123; packages &#125;&#125;&quot;      vars:        packages:          - httpd          - mariadb-server          - php          - php-mysql          - php-pdo    - name: 启动 httpd      systemd:        name: httpd        state: started        enabled: yes    - name: 启动 mariadb      systemd:        name: mariadb        state: started        enabled: yes    - name: 下载 WordPress      get_url:        url: &quot;http://files.example.com/software/wordpress-5.0.3-zh_CN.tar.gz&quot;        dest: /var/www/html    - name: 解压      unarchive:        src: /var/www/html/wordpress-5.0.3-zh_CN.tar.gz        dest: /var/www/html        remote_src: yes
+
+这个例子里所有服务写在一个文件中，只适合练手。按前面讲的 roles 纪律，生产环境应该拆成 httpd、php、mariadb 三个独立角色，各自带自己的任务、模板和变量——这样任何项目要装 PHP，引用一下就行。
+项目跑通后可以顺着往深挖两步：用 mysql_db 和 mysql_user 模块建库建账号（代码里不用再手敲 grant 语句），再把 WordPress 的数据库连接信息用 Jinja2 模板渲染进 wp-config.php。一套完整的”部署 + 配置”闭环就形成了。
+七、角色依赖与社区角色角色之间可以声明依赖。比如 WordPress 依赖 Nginx 和 PHP，写在 meta 里：
+# roles/wordpress/meta/main.ymldependencies:  - &#123; role: nginx &#125;  - &#123; role: php &#125;
+
+执行到 wordpress 角色时，Ansible 会先跑 nginx 和 php——部署顺序不用在 site.yml 里手工排。
+社区角色库 Ansible Galaxy 值得会用：
+ansible-galaxy search nginx              # 搜索ansible-galaxy info geerlingguy.nginx    # 看详情ansible-galaxy install geerlingguy.nginx # 安装ansible-galaxy list                      # 已安装列表
+
+社区角色适合做参考和起步，但生产环境我建议核心角色自己写：社区角色的变量、行为不一定符合你的规范，出了问题也不好排查。参考它的目录组织和变量设计，比直接用更值。
+收尾的一点感受从单文件剧本到 roles 工程化，核心变化就三点：一个角色只干一件事、可变内容全部进变量、配置差异交给 Jinja2 模板。做到这三点，你的一套部署代码就能从几台机器的练习环境，平滑地复制到上百台的业务环境——这才是自动化工具真正的价值所在。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Ansible</tag>
+        <tag>Playbook</tag>
+        <tag>自动化</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Ansible 入门实践：架构、安装与生产级 Inventory 管理</title>
+    <url>/2024/06/05/Ansible%E5%85%A5%E9%97%A8%E5%AE%9E%E8%B7%B5%E4%B8%8E%E7%94%9F%E4%BA%A7%E7%BA%A7Inventory/</url>
+    <content><![CDATA[Ansible 入门实践：架构、安装与生产级 Inventory 管理公司服务器数量涨到三十多台的时候，我还在用最原始的办法：写个 for 循环，把 IP 列在脚本里，ssh 上去挨个执行。有一批机器的 SSH 端口改过，脚本跑一半断在中间，剩下的一半改了、一半没改——最后靠人工对账才收场。那次之后我把 Ansible 捡了起来，第一个动作就是把”哪些机器、分成几组、怎么连”从脚本里搬进 Inventory。
+一、Ansible 是什么，为什么选它Ansible 是自动化配置管理工具，能力可以概括成几块：
+
+远程执行：一条命令在多台主机上执行操作；
+配置管理：批量配置软件服务，统一管理配置和启停；
+事件驱动：按条件触发动作，比如”配置变了才重启服务”；
+任务编排：用 playbook 把一套完整部署串起来，一条命令部署一整个架构；
+跨平台：一套剧本兼容不同发行版，比如安装 Apache，CentOS 叫 httpd、Ubuntu 叫 apache2，Ansible 按系统类型分发。
+
+它和手工脚本最本质的区别有两个：无 Agent（被控端什么都不用装，控制端通过 SSH 连过去执行）和幂等（同一个剧本执行多遍，结果一致，不会重复装、重复改）。这两条决定了它敢在生产环境反复跑。
+架构上很简单：控制端（装了 Ansible 的那台）→ SSH → 被控端（只需要有 Python）。所以安装只需要装控制端，被控端零部署。
+二、安装与配置文件# 1. 安装 EPEL 源（CentOS 7）wget -O /etc/yum.repos.d/epel.repo http://mirrors.aliyun.com/repo/epel-7.repo# 2. 安装 Ansibleyum install -y ansible# 3. 查看版本和模块路径ansible --version
+
+装完先改一个高频配置：跳过首次连接的指纹确认。
+# /etc/ansible/ansible.cfg 中确认这一行host_key_checking = False
+
+不关掉它，批量操作时每台新机器都弹一次指纹确认，自动化就无从谈起。生产上这个配置由”首次统一纳管时人工核对指纹”来补安全，而不是靠交互确认。
+配置文件有四个读取位置，优先级从高到低：
+1. $ANSIBLE_CONFIG            # 环境变量指定的2. ./ansible.cfg              # 当前项目目录（生产用这个）3. ~/.ansible.cfg             # 用户级4. /etc/ansible/ansible.cfg   # 系统级默认
+
+常用配置项过一遍，后面写项目配置直接参考：
+inventory      = /etc/ansible/hosts      # 主机清单路径forks          = 5                       # 默认并发数remote_port    = 22                      # 远程端口host_key_checking = False                # 跳过主机指纹检查log_path       = /var/log/ansible.log    # 执行日志
+
+三、命令行工具速览Ansible 的命令行工具各管一摊，常用的这几个：
+ansible &lt;host-pattern&gt; [options]   # ad-hoc 临时命令ansible-playbook playbook.yml      # 执行剧本（生产最核心）ansible-doc -l                     # 列出所有模块ansible-doc yum                    # 查指定模块文档ansible-vault encrypt vars.yml     # 加密敏感变量文件ansible-galaxy install geerlingguy.nginx   # 安装社区角色ansible-inventory --graph          # 树形展示主机分组
+
+ansible 命令的常用参数：-i 指定清单、-m 指定模块、-a 传模块参数、-f 并发数、-b 提权执行、-C 模拟执行（干跑）。
+查参数这个习惯值得早点养成：ansible-doc -s &lt;模块名&gt; 直接列出精简参数表，比在网上翻博客可靠得多。
+四、Inventory：把服务器变成结构化的资产Inventory 就是主机清单，定义”管哪些机器、怎么连、怎么分组”。最初的形态是 /etc/ansible/hosts 这样的 INI 文件：
+# 基于密钥连接（推荐）[web_group]web01 ansible_ssh_host=10.0.8.7web02 ansible_ssh_host=10.0.8.8# 组变量写法：端口、用户等组内通用配置[db_group]db01 ansible_ssh_host=10.0.8.51[db_group:vars]ansible_ssh_port=22# 组的组：lnmp 包含 db 和 web 两个子组[lnmp:children]db_groupweb_group
+
+几种连接方式都见过：密钥连接是标准姿势，密码连接（ansible_ssh_pass）只建议在临时环境用——密码明文写在清单里，属于安全生产的禁区。
+验证清单的方式：
+ansible all -m ping -i ./hosts --list-host    # 列出所有主机ansible-inventory -i ./hosts --graph          # 树形看分组结构
+
+五、生产环境的清单怎么组织上面 INI 只是入门形态。真实的运维现场，Ansible 文件不应该散落在用户目录和全局配置里，而是按环境隔离、清单与变量分离，放进独立的项目目录：
+/opt/ops-ansible/               # 运维工具根目录下的项目├── inventories/│   ├── prod/                   # 生产环境│   │   ├── hosts               # 主机清单│   │   ├── group_vars/         # 组变量（自动加载，不用手动引用）│   │   │   └── all.yml         # 生产全局变量│   │   └── host_vars/          # 单主机专属变量│   └── test/                   # 测试环境，结构与 prod 完全一致├── playbooks/                  # 剧本├── roles/                      # 角色├── files/                      # 静态分发文件├── templates/                  # Jinja2 模板└── ansible.cfg                 # 项目级配置
+
+项目级 ansible.cfg 的几个关键项，都是踩过坑之后加的：
+[defaults]# 默认清单指向测试环境：生产操作必须显式 -i 指定，防止手滑inventory = ./inventories/test/hostsremote_user = roothost_key_checking = Falseroles_path = ./rolesstdout_callback = yaml            # 输出用 yaml 格式，排查更清晰gathering = smart                 # 智能收集 facts，大环境提速forks = 10[ssh_connection]pipelining = True                 # SSH 连接复用，批量执行提速明显ssh_args = -o ControlMaster=auto -o ControlPersist=300s
+
+其中”默认清单指向测试环境”这一条是安全红线：生产操作永远要显式 -i inventories/prod/hosts，不能靠默认配置。默认连生产的环境，早晚会有人在深夜敲错命令。
+生产清单的写法示例：
+# ==========================================# 生产环境主机清单# 环境标识：prod# 维护人：运维团队# ==========================================[prod_web]web01 ansible_host=10.0.8.7web02 ansible_host=10.0.8.8web03 ansible_host=10.0.8.9[prod_nfs]nfs01 ansible_host=10.0.8.31[prod_db]db01 ansible_host=10.0.8.51[prod:children]prod_webprod_nfsprod_db[prod:vars]env = productionansible_ssh_private_key_file = ~/.ssh/id_rsa
+
+所有配置文件都加文件头注释（用途、维护人、更新时间），交接的时候不用问人。
+清单与变量分离是另一个核心习惯。变量不写在 hosts 文件里，而是放在对应层级的变量目录：
+# inventories/prod/group_vars/all.yml —— 全局变量，所有主机自动加载timezone: Asia/Shanghaidns_servers:  - 223.5.5.5  - 114.114.114.114# inventories/prod/group_vars/prod_web.yml —— web 组专属nginx_version: 1.24.0nginx_listen_port: 80# inventories/prod/host_vars/db01.yml —— db01 单机专属，优先级最高mysql_version: 8.0.36mysql_data_dir: /data/mysql
+
+目录和文件名规则就一条：group_vars 下的文件名必须和清单里的组名一致，host_vars 下的文件名必须和主机名一致，Ansible 会自动加载，不需要任何引用。写错了不生效，而且不报错，只能靠 ansible-inventory --host 自己核。
+六、从 ad-hoc 开始用起来装好之后先用 ad-hoc（临时命令）熟悉手感——执行完即结束，不落文件：
+# 批量看 web 节点 nginx 状态ansible prod_web -m shell -a &quot;systemctl is-active nginx&quot; -i inventories/prod/hosts# 批量设置时区ansible all -m timezone -a &quot;name=Asia/Shanghai&quot; -i inventories/prod/hosts# 批量分发公钥ansible all -m authorized_key -a &quot;user=root key=&#x27;&#123;&#123; lookup(&#x27;file&#x27;, &#x27;~/.ssh/id_rsa.pub&#x27;) &#125;&#125;&#x27;&quot; -i inventories/prod/hosts# 看磁盘ansible web01 -m command -a &#x27;df -h&#x27; -i inventories/prod/hosts
+
+输出颜色是三类：绿色（无变更）、黄色（有变更）、红色（失败）。批量操作里先扫一眼有没有红色，再决定下一步，这个习惯能拦住绝大多数”改了一半”的事故。
+最后用一个规范的剧本收尾：全量主机连通性检测。
+# playbooks/test_connect.yml# 功能：生产环境全量主机 SSH 连通性校验---- name: 生产环境主机连通性检测  hosts: prod  gather_facts: no  tasks:    - name: 执行 ping 模块验证 SSH 连接正常      ansible.builtin.ping:
+
+cd /opt/ops-ansibleansible-inventory -i inventories/prod/hosts --graph          # 先看清单对不对ansible-playbook -i inventories/prod/hosts playbooks/test_connect.yml
+
+模块名建议写全限定形式（ansible.builtin.ping），不用简写——大项目里简写会有歧义，全限定名一眼能看出模块归属。
+小结这一篇的重点其实不是安装和命令，而是 Inventory 的组织方式：环境隔离、清单与变量分离、生产操作显式指定清单。这几条定下来，后面 playbook 和 roles 才有地方安放；清单乱着放，剧本写得再漂亮也不敢在生产跑。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Ansible</tag>
+        <tag>自动化</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Ansible 常用模块实战：从软件包到数据库</title>
+    <url>/2024/06/23/Ansible%E5%B8%B8%E7%94%A8%E6%A8%A1%E5%9D%97%E5%AE%9E%E6%88%98%E4%BB%8E%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%88%B0%E6%95%B0%E6%8D%AE%E5%BA%93/</url>
+    <content><![CDATA[Ansible 常用模块实战：从软件包到数据库Ansible 用起来之后，我给自己整理过一份”模块速查表”——不是背参数，而是记住”哪类活对应哪个模块、关键参数是哪几个”。这份表后来成了我写剧本时的第一参考，这篇把它整理出来，从最常用的软件包、文件、服务，一直到用 community.mysql 批量管理数据库。
+一、命令执行三兄弟# command：默认模块，执行单条命令，不支持管道和重定向- name: 查看主机名  command: hostname# shell：需要管道、重定向、变量展开时用- name: 查 nginx 进程  shell: ps -ef | grep nginx# script：把本地脚本推到远端执行，不用手动分发- name: 执行本地检查脚本  script: /opt/ops-ansible/scripts/check.sh
+
+原则很简单：能用 command 就用 command（更安全，没有 shell 注入问题），需要管道才换 shell。
+二、软件包管理# yum：安装/卸载/指定版本- name: 安装指定版本 Nginx  yum:    name: nginx-1.20.1    state: present    enablerepo: epel    update_cache: yes        # 等价 yum makecache
+
+state 的取值要分清：present&#x2F;installed 是安装、absent&#x2F;removed 是卸载、latest 是升到最新。批量管控时用固定版本号，别用 latest——“所有机器版本一致”比”都是最新的”重要。
+# yum_repository：批量写 yum 源（内网环境标配）- name: 配置内网 Base 源  yum_repository:    name: local-base    description: 内网 CentOS7 Base 源    baseurl: http://172.18.1.100/yum/centos7/base    gpgcheck: no    enabled: yes    file: internal-yum        # 多个仓库会写进同一个 repo 文件# rpm：装本地上传的 rpm 包（比如自研 Agent）- name: 上传并安装监控 Agent  copy:    src: ../files/monitor-agent.rpm    dest: /tmp/monitor-agent.rpm- name: 本地安装 rpm  rpm:    name: /tmp/monitor-agent.rpm    state: present
+
+三、文件管理：分发与配置修改# copy：静态文件分发- name: 分发 rsyncd 主配置  copy:    src: ../files/rsyncd.conf    dest: /etc/rsyncd.conf    owner: root    group: root    mode: &#x27;0644&#x27;    backup: yes               # 覆盖前自动备份，改动可追溯
+
+copy 的 backup: yes 在生产上必开：它会把被覆盖的旧文件按时间戳备份，出问题能马上找回原文件。
+# file：目录、权限、软链- name: 创建网站根目录  file:    path: /data/www/html    state: directory    owner: nginx    group: nginx    mode: &#x27;0755&#x27;    recurse: yes# 生产常用：版本目录做成软链，升级只改指向- name: 创建应用软链  file:    src: /opt/app-v1.2.3    dest: /opt/app-current    state: link- name: 清理临时目录  file:    path: /tmp/install_pkg    state: absent             # 递归删除，等价 rm -rf，慎用
+
+# get_url + unarchive：远程下载并解压，配合出幂等- name: 下载 Node Exporter  get_url:    url: http://172.18.1.100/software/node_exporter-1.8.2.linux-amd64.tar.gz    dest: /tmp/node_exporter.tar.gz    checksum: sha256:&lt;校验值&gt;    force: no                 # 本地已存在就不重复下载- name: 解压到安装目录  unarchive:    src: /tmp/node_exporter.tar.gz    dest: /opt/node_exporter    remote_src: yes           # 压缩包在被控端（配合 get_url 必须加）    extra_opts: [--strip-components=1]   # 去掉压缩包顶层目录    creates: /opt/node_exporter/node_exporter   # 已存在就不解压
+
+creates 参数是幂等的关键：它让”这个文件已存在就跳过”，重复执行剧本不会报错也不会重复解压。
+改配置文件有三件套，用哪个看场景：
+
+
+
+模块
+适用场景
+特点
+
+
+
+lineinfile
+改单行配置，确保某行存在&#x2F;不存在
+按整行匹配，天然幂等
+
+
+replace
+全局字符串替换，多处同类修改
+只替换匹配片段，不关心整行
+
+
+blockinfile
+插入&#x2F;更新一段多行配置
+用标记行包裹，不会重复插入
+
+
+# lineinfile：关 SELinux- name: 关闭 SELinux  lineinfile:    path: /etc/selinux/config    regexp: &#x27;^SELINUX=&#x27;    line: &#x27;SELINUX=disabled&#x27;    backup: yes# lineinfile：禁止 root 直接 SSH 登录- name: 禁止 root 直登  lineinfile:    path: /etc/ssh/sshd_config    regexp: &#x27;^PermitRootLogin&#x27;    line: &#x27;PermitRootLogin no&#x27;    backup: yes  notify: 重启sshd# replace：把监听地址从 127.0.0.1 换成 0.0.0.0- name: 批量替换监听地址  replace:    path: /etc/redis/redis.conf    regexp: &#x27;127\.0\.0\.1&#x27;    replace: &#x27;0.0.0.0&#x27;    backup: yes# blockinfile：追加内核优化配置块- name: 添加内核优化参数  blockinfile:    path: /etc/sysctl.conf    block: |      net.ipv4.tcp_syncookies = 1      net.ipv4.tcp_max_syn_backlog = 8192      fs.file-max = 655350    marker: &quot;# &#123;mark&#125; KERNEL OPTIMIZE BLOCK&quot;    backup: yes
+
+四、服务管理：service 与 systemd- name: 启动 rsyncd 并设为开机自启  service:    name: rsyncd    state: started    enabled: yes# systemd 模块多一个关键参数：daemon_reload- name: 分发 node_exporter 单元文件并重启  copy:    src: ../files/node_exporter.service    dest: /usr/lib/systemd/system/node_exporter.service  notify: 重启node_exporter# handlers 里- name: 重启node_exporter  systemd:    name: node_exporter    state: restarted    enabled: yes    daemon_reload: yes        # 新增/修改 unit 文件后必须重载
+
+state 取值里有个容易忽略的点：restarted 每次执行都会真的重启，不幂等；started 才是”没启动才启动”。日常用 started，只有配置变更触发时才在 handler 里用 restarted。
+五、用户、定时任务与挂载# 批量创建业务账号（循环）- name: 批量创建业务用户  user:    name: &quot;&#123;&#123; item.name &#125;&#125;&quot;    group: biz    shell: /bin/bash    create_home: yes  loop:    - &#123; name: &#x27;biz_user1&#x27; &#125;    - &#123; name: &#x27;biz_user2&#x27; &#125;# 外包账号设过期时间，到期自动失效- name: 创建临时外包账号  user:    name: temp_outsource    shell: /bin/bash    expires: &quot;&#123;&#123; &#x27;2024-12-31&#x27; | to_datetime(&#x27;%Y-%m-%d&#x27;) | int &#125;&#125;&quot;# 分发运维公钥- name: 推送运维公钥  authorized_key:    user: opsadmin    key: &quot;&#123;&#123; lookup(&#x27;file&#x27;, &#x27;/root/.ssh/id_rsa.pub&#x27;) &#125;&#125;&quot;    state: present
+
+expires 参数很适合外包&#x2F;临时账号管理——比”到期记得手动删”靠谱得多。
+# cron：批量下发定时任务- name: 每天凌晨 2 点 MySQL 全量备份  cron:    name: &quot;mysql-full-backup-daily&quot;    user: root    minute: &quot;0&quot;    hour: &quot;2&quot;    job: &quot;/usr/bin/mysqldump -uroot -p&#x27;Root@123456&#x27; --all-databases &gt; /backup/mysql_full_$(date +\\%Y\\%m\\%d).sql 2&gt;&gt; /var/log/mysql_backup.log&quot;    backup: yes- name: 工作时段健康巡检（每 10 分钟）  cron:    name: &quot;app-health-check-worktime&quot;    minute: &quot;*/10&quot;    hour: &quot;9-18&quot;    weekday: &quot;1-5&quot;    job: &quot;/opt/scripts/health_check.sh &gt;&gt; /var/log/health_check.log 2&gt;&amp;1&quot;
+
+注意 cron 里 backup: yes 同样建议开着，批量改 crontab 出问题时能对照原文件。备份任务里的密码明文是个反面教材——生产应该走 vault 或者独立的密码文件，后面讲变量的文章会展开。
+# mount：挂盘并写 fstab- name: 挂载数据盘  mount:    path: /data    src: /dev/mapper/data_vg-data_lv    fstype: xfs    opts: defaults,noatime    state: mounted          # 挂载 + 写 fstab；只写 fstab 用 present    backup: yes
+
+state 的四种取值值得记：mounted（挂载且写 fstab）、present（只写 fstab）、unmounted（卸载但保留 fstab）、absent（卸载并清 fstab）。
+六、防火墙与主机信息# firewalld：批量放行端口- name: 批量放行常用端口  ansible.posix.firewalld:    port: &quot;&#123;&#123; item.port &#125;&#125;/&#123;&#123; item.proto &#125;&#125;&quot;    permanent: yes    immediate: yes    state: enabled  loop:    - &#123; port: &quot;80&quot;, proto: &quot;tcp&quot; &#125;    - &#123; port: &quot;443&quot;, proto: &quot;tcp&quot; &#125;    - &#123; port: &quot;3306&quot;, proto: &quot;tcp&quot; &#125;# 富规则：3306 只允许内网网段访问- name: 限制数据库端口来源  ansible.posix.firewalld:    rich_rule: &#x27;rule family=&quot;ipv4&quot; source address=&quot;172.18.1.0/24&quot; port port=&quot;3306&quot; protocol=&quot;tcp&quot; accept&#x27;    permanent: yes    immediate: yes    state: enabled    zone: internal
+
+permanent 和 immediate 建议都写 yes：前者保证重启后仍生效，后者保证当前立刻生效。只写 permanent 的话，端口要等下次重启才通，这个坑我踩过一次——放行完端口，服务还是连不上，排查半天。
+主机信息采集用 setup 模块（playbook 默认自动执行，即 gather_facts），采集结果放在 ansible_facts 里，巡检类剧本全靠它：
+- debug:    msg: &quot;主机名：&#123;&#123; ansible_facts[&#x27;hostname&#x27;] &#125;&#125;&quot;- debug:    msg: &quot;内存：&#123;&#123; ansible_facts[&#x27;memtotal_mb&#x27;] &#125;&#125; MB，CPU：&#123;&#123; ansible_facts[&#x27;processor_vcpus&#x27;] &#125;&#125; 核&quot;- debug:    var: ansible_facts[&#x27;mounts&#x27;]        # 挂载点、容量、使用率
+
+七、MySQL 批量管理：community.mysql数据库这块用官方集合 community.mysql，先装：
+# 控制端安装集合ansible-galaxy collection install community.mysql# 被控端（MySQL 服务器）需要 Python 驱动yum install -y python3-PyMySQL        # MySQL 8 + Python3
+
+认证安全有两条路：被控端在 /root/.my.cnf 配好免密登录（模块自动读取，剧本里不出现密码）；或者用 ansible-vault 加密的变量传入。密码直接写在剧本里是不行的，剧本是进版本库的。
+# mysql_db：建库 / 备份 / 导入- name: 创建订单业务库  community.mysql.mysql_db:    name: app_order    state: present    encoding: utf8mb4    collation: utf8mb4_unicode_ci- name: 备份订单库（gzip 压缩、不锁表）  community.mysql.mysql_db:    name: app_order    state: dump    target: /data/backup/app_order_2024-06-23.sql.gz    single_transaction: yes     # InnoDB 一致性备份，不锁表    quick: yes                  # 大库减少内存占用
+
+# mysql_user：按最小权限建账号- name: 创建业务只读账号  community.mysql.mysql_user:    name: app_ro    host: &#x27;10.0.8.%&#x27;            # 严格限制来源网段，别写 %    password: &#x27;StrongPass@2024&#x27;    priv: &#x27;app_order.*:SELECT&#x27;    append_privs: yes           # 追加权限，不覆盖已有    update_password: on_create  # 只在创建时设密码，日常同步不动密码    state: present
+
+账号管理有三条生产规范：host 精确到网段，不写 %；append_privs: yes 避免覆盖已有权限；update_password: on_create 让”同步账号”和”改密码”两件事解耦。
+# mysql_variables：在线调参，应急场景- name: 连接数打满时临时调大  community.mysql.mysql_variables:    variable: max_connections    value: 2000    mode: global# mysql_info：批量巡检采集- name: 采集实例基础信息  community.mysql.mysql_info:    filter: [version, databases, status]  register: mysql_info_result# mysql_replication：主从状态批量检查- name: 获取从库复制状态  community.mysql.mysql_replication:    mode: getslave  register: slave_status- name: 输出同步延迟  debug:    msg: &quot;延迟：&#123;&#123; slave_status.Seconds_Behind_Master &#125;&#125; 秒&quot;
+
+mysql_replication 配合 when 断言可以做自动告警：延迟超过阈值就 fail 掉这一台，巡检结果里直接能看出来。最后是 mysql_query，用来执行模块覆盖不到的自定义 SQL——生产上有个纪律：执行 DML&#x2F;DDL 前必须备份，禁止执行没有 WHERE 条件的 UPDATE&#x2F;DELETE。
+- name: 清理半年前的访问日志  community.mysql.mysql_query:    login_db: app_order    query: &quot;DELETE FROM access_log WHERE create_time &lt; DATE_SUB(NOW(), INTERVAL 6 MONTH)&quot;
+
+两句经验模块不需要背全，抓住几条主线就行：安装用 yum、分发用 copy、改配置用 lineinfile 三件套、服务联动靠 notify&#x2F;handlers、数据库操作走 community.mysql。真正的功夫在参数的”生产值”上——backup 开不开、version 固定不固定、权限给多少，这些决定了剧本能不能在生产放心地跑第二遍。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Ansible</tag>
+        <tag>自动化</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Ansible 流程控制实战：when、循环、handlers 与标签</title>
+    <url>/2024/08/04/Ansible%E6%B5%81%E7%A8%8B%E6%8E%A7%E5%88%B6%E5%AE%9E%E6%88%98when%E5%BE%AA%E7%8E%AFhandlers%E4%B8%8E%E6%A0%87%E7%AD%BE/</url>
+    <content><![CDATA[Ansible 流程控制实战：when、循环、handlers 与标签写过几个剧本之后，你一定会遇到同一类需求：同一套剧本，web 机器该装 Nginx、db 机器该装 MySQL；配置文件只有真改了才重启服务；上百行的剧本想只跑其中一段调试。这些”分岔”和”联动”靠的就是流程控制。这篇把 when、循环、handlers、tags、include 和错误处理挨个过一遍。
+一、when：一套剧本适配多主机when 是条件和执行之间的开关，最典型的三个场景：
+
+不同系统装不同的包名（CentOS 用 yum，Ubuntu 用 apt）；
+客户端和服务器共用一个剧本，但只有服务端需要推配置文件；
+源码编译先判断”是否已经装过”，避免重复执行。
+
+- hosts: web_group  tasks:    - name: 安装 CentOS 的 httpd      yum:        name: httpd        state: present      when: ansible_facts[&#x27;os_family&#x27;] == &quot;RedHat&quot;    - name: 安装 Debian 系的 apache2      apt:        name: apache2        state: present      when: ansible_facts[&#x27;os_family&#x27;] == &quot;Debian&quot;
+
+条件可以组合，也可以写成列表（列表里多个条件是”且”的关系）：
+# 括号分组：CentOS 6 或 Debian 7 才执行- command: /sbin/shutdown -t now  when: (ansible_facts[&#x27;distribution&#x27;] == &quot;CentOS&quot; and ansible_facts[&#x27;distribution_major_version&#x27;] == &quot;6&quot;) or        (ansible_facts[&#x27;distribution&#x27;] == &quot;Debian&quot; and ansible_facts[&#x27;distribution_major_version&#x27;] == &quot;7&quot;)# 列表写法：所有条件都满足才执行- command: /sbin/shutdown -t now  when:    - ansible_facts[&#x27;distribution&#x27;] == &quot;CentOS&quot;    - ansible_facts[&#x27;distribution_major_version&#x27;] == &quot;6&quot;
+
+还有一种基于返回值的匹配判断，match 是通配匹配、search 是包含匹配：
+- name: 检查 nginx 配置  command: /usr/sbin/nginx -t  register: result  ignore_errors: yes- name: 按 IP 段或主机名做条件  command: echo &quot;命中&quot;  when: ansible_facts[&#x27;default_ipv4&#x27;][&#x27;address&#x27;] is match &quot;10.0.8.*&quot;
+
+is match 用的是通配符（*），is search 是子串包含——一个容易混的点：判断”输出里包含 successful”要用 search，用 match 必须从头匹配才成立。
+二、一个真实剧本：rsync 的差异化部署rsync 服务端和客户端常在一份剧本里，靠主机名分流：
+- hosts: rsync_all  tasks:    - name: 安装 rsync 软件包      yum:        name: rsync        state: present    - name: 创建 www 组      group:        name: www        gid: 666    - name: 仅备份服务器推送服务端配置      copy:        src: ./rsyncd.conf        dest: /etc/rsyncd.conf        mode: &#x27;0644&#x27;      when: ansible_hostname == &quot;backup01&quot;    - name: 仅备份服务器创建认证文件      copy:        content: &#x27;rsync_backup:123&#x27;        dest: /etc/rsync.passwd        mode: &#x27;0600&#x27;      when: ansible_hostname == &quot;backup01&quot;    - name: 仅备份服务器启动服务      systemd:        name: rsyncd        state: started        enabled: yes      when: ansible_hostname == &quot;backup01&quot;    - name: 仅 web 服务器下发备份脚本      copy:        src: ./backup.sh        dest: /root/backup.sh        mode: &#x27;0755&#x27;      when: ansible_hostname is match &quot;web*&quot;
+
+这就是 when 的核心价值：同一份剧本，撒到整个组上，每台机器各拿各的分支。不用为客户端和服务端各写一份，维护成本减半。
+三、循环：重复的活只写一次列表循环最简单：
+- hosts: web_group  tasks:    - name: 安装多个软件包      yum:        name: &quot;&#123;&#123; item &#125;&#125;&quot;        state: present      loop:        - httpd        - httpd-tools        - php
+
+更常用的是字典循环，一次循环里带多组参数：
+- name: 批量创建用户（每组参数不同）  user:    name: &quot;&#123;&#123; item.name &#125;&#125;&quot;    groups: &quot;&#123;&#123; item.groups &#125;&#125;&quot;    state: present  loop:    - &#123; name: &#x27;ops&#x27;, groups: &#x27;ops&#x27; &#125;    - &#123; name: &#x27;bizdev&#x27;, groups: &#x27;dev&#x27; &#125;- name: 拷贝多个文件（源、目标、权限都不同）  copy:    src: &quot;&#123;&#123; item.src &#125;&#125;&quot;    dest: &quot;&#123;&#123; item.dest &#125;&#125;&quot;    mode: &quot;&#123;&#123; item.mode &#125;&#125;&quot;  loop:    - &#123; src: &quot;./httpd.conf&quot;, dest: &quot;/etc/httpd/conf/&quot;, mode: &quot;0644&quot; &#125;    - &#123; src: &quot;./upload.php&quot;, dest: &quot;/var/www/html/&quot;, mode: &quot;0600&quot; &#125;
+
+loop 是新写法，老笔记里常见的 with_items 依然可用（两者在简单列表场景等价）。新写剧本建议统一用 loop，语义更清楚。
+四、notify 与 handlers：配置变了才重启这是 Ansible 里设计最精妙的一对概念。问题很直接：改了 nginx 配置要重启服务，但总不能每次执行剧本都重启一次吧？
+tasks:  - name: 安装 httpd    yum:      name: httpd      state: present  - name: 分发 httpd 配置    template:      src: ./httpd.j2      dest: /etc/httpd/conf/httpd.conf    notify: 重启httpd          # 只有这个任务真的改了文件才会触发  - name: 启动 httpd    service:      name: httpd      state: started      enabled: yeshandlers:  - name: 重启httpd    systemd:      name: httpd      state: restarted
+
+机制是这样的：配置模块执行后如果 changed=true（内容真的变了），就触发 notify 指定的 handler；所有 task 执行完，统一执行被触发的 handlers；同一个 handler 被多次 notify 也只执行一次。配置没变，handler 完全不执行，服务不受打扰。
+五条行为规则要记住，都是排查”明明改了配置为什么没重启”的钥匙：
+
+无论多少个任务 notify 了同一个 handler，它只会在所有 task 结束后运行一次；
+handler 所在的任务如果因为条件判断没执行，handler 也不会执行；
+handler 在该 play 末尾运行；想在中间就执行，用 meta: flush_handlers；
+play 中途失败，后面的 handler 不会执行（除非 --force-handlers）；
+不能把 handler 当普通 task 用——它只响应 notify。
+
+五、标签：大剧本的分段执行剧本一长，调试就成了问题：只想跑”配置更新”这一段，不想重装软件。给任务打标签解决：
+- hosts: web_group  tasks:    - name: 安装 httpd      yum:        name: httpd        state: present      tags: install_httpd    - name: 分发配置      template:        src: ./httpd.j2        dest: /etc/httpd/conf/httpd.conf      notify: 重启httpd      tags: [config_httpd, httpd_server]    - name: 启动服务      service:        name: httpd        state: started      tags: service_httpd
+
+ansible-playbook tag.yml --list-tags              # 先看有哪些标签ansible-playbook tag.yml -t config_httpd          # 只跑打这个标签的任务ansible-playbook tag.yml -t install_httpd,config_httpdansible-playbook tag.yml --skip-tags service_httpd  # 跳过指定标签
+
+一个实用的团队约定：给每个任务都打”模块标签 + 业务标签”两个，比如 [config_httpd, httpd_server]——前者按动作执行，后者按业务整体执行，两种切法都支持。
+六、文件复用：include_tasks 与 import_playbook一个剧本上百行就该拆了。两种复用方式：
+# include_tasks：引用任务文件（动态，运行时展开）- hosts: web_group  tasks:    - include_tasks: task_install.yml    - include_tasks: task_configure.yml    - include_tasks: task_start.yml
+
+# import_playbook：拼装多个完整剧本，做成&quot;一键入口&quot;# site.yml- import_playbook: httpd.yml- import_playbook: nfs.yml- import_playbook: rsync.yml
+
+区别在加载时机：include_tasks 是运行时动态加载，import_playbook 是开始前静态引入。日常拆分任务用前者，做统一入口用后者。有了入口文件，一套架构的部署就是一条命令：
+ansible-playbook site.yml
+
+七、错误处理：三个实用开关ignore_errors：默认剧本遇到失败会立刻停下，但有些任务”失败也不影响继续”（比如检测类的命令）：
+- name: 检测命令（失败也继续）  command: /bin/false  ignore_errors: yes- name: 后续任务照常执行  file:    path: /tmp/task_done.txt    state: touch
+
+force_handlers：play 中途失败时，已触发的 handler 默认不执行——这可能导致”配置改了但服务没重载”的中间状态。加这个开关强制把 handler 跑完：
+- hosts: web_group  force_handlers: yes
+
+changed_when：有些命令（比如检测类 shell）其实没改任何东西，但 Ansible 认为它 always changed。这两个作用：一是输出更准，二是避免误触发 handler：
+- name: 检查 httpd 状态（抑制 changed）  shell: netstat -lntup | grep httpd  register: check_httpd  changed_when: false- name: 检查配置语法（按输出判断）  shell: /usr/sbin/httpd -t  register: httpd_check  changed_when:    - httpd_check.stdout.find(&#x27;OK&#x27;)    - false
+
+一句总结流程控制这几个工具，解决的是同一件事：让剧本带上判断力。when 决定”该不该做”、loop 决定”做几遍”、handlers 决定”什么时候做”（配置真的变了才做）、tags 决定”这次只做哪部分”。把它们用顺，剧本才会从一条直线变成能适应复杂环境的程序。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Ansible</tag>
+        <tag>Playbook</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>GitHub 协作实践：PR 流程、分支保护与 Actions 入门</title>
+    <url>/2024/01/28/GitHub%E5%8D%8F%E4%BD%9C%E5%AE%9E%E8%B7%B5PR%E6%B5%81%E7%A8%8B%E4%B8%8E%E5%88%86%E6%94%AF%E4%BF%9D%E6%8A%A4/</url>
+    <content><![CDATA[GitHub 协作实践：PR 流程、分支保护与 Actions 入门在真正用起来之前，我一直觉得 Pull Request 这东西有点形式主义：改几行代码，为什么要绕”建分支、推上去、开 PR、等审查、再合并”这么大一圈？直到有一次在协作项目里，我没走 PR 直接推了 main，把别人正在测的一版配置覆盖了，对着一堆报错排查了一下午。从那以后我理解了：PR 不是流程装饰，它把”谁能改什么、改完谁确认”这件事变成了可见的记录。
+一、先分清 Git 和 GitHub这两个东西经常被混着叫，其实分工很清楚：
+
+Git 是本地命令行工具，负责版本控制本身；
+GitHub 是基于 Git 的云端代码托管平台，在 Git 之上加了 Web 协作功能：Issue、PR、Actions、权限管理。
+
+两者通过 git push &#x2F; git pull 协作。放到企业环境里，还有个更实际的对比：
+
+
+
+维度
+GitHub
+GitLab
+
+
+
+形态
+公有云 SaaS
+支持私有化部署（CE 免费）
+
+
+私有仓库
+收费（有免费额度）
+自建随你建
+
+
+典型场景
+开源项目、个人项目
+企业内网代码平台
+
+
+国内企业内网普遍用自建 GitLab，代码不出网。所以运维岗位日常接触 GitLab 更多，但 GitHub 的协作模型是相通的，先把 PR 这套玩明白，换平台只是换个叫法（GitHub 叫 PR，GitLab 叫 MR）。
+二、连接 GitHub 的两种方式# HTTPS：用 Token 认证，适合临时使用或 22 端口被封的网络git clone https://github.com/user/repo.git# SSH：用密钥认证，日常长期使用推荐ssh-keygen -t ed25519 -C &quot;you@example.com&quot;cat ~/.ssh/id_ed25519.pub     # 贴到 Settings → SSH and GPG keysssh -T git@github.com         # 看到 Hi xxx! You&#x27;ve successfully authenticated 就是通了
+
+企业内网经常封 22 端口，走 SSH 的仓库会连不上，这时要么改用 HTTPS + Token，要么让网络同事放行 ssh.github.com:443。这一点在做企业项目时值得提前确认，不然 clone 一次卡十分钟。
+三、把本地仓库推上 GitHubgit init &amp;&amp; git add . &amp;&amp; git commit -m &quot;Initial commit&quot;git remote add origin https://github.com/user/repo.gitgit push -u origin main
+
+顺带把 Fork 和 Clone 的区别说清楚，这是两个容易混的概念：
+
+Clone：把仓库下载到本地，日常开发用这个；
+Fork：在 GitHub 云端把别人的仓库复制一份到你账户下，和原仓库保留关联，改完可以向上游提 PR——开源贡献用这个。
+
+工作流的差别也在这：给别人的项目提 PR 要先 Fork 再 Clone；自己团队的仓库直接 Clone。
+四、PR 的标准流程一个完整的 PR 流程大概是这样：
+# ① 从 main 创建功能分支git switch -c feature/xxx# ② 开发、提交、推送git add . &amp;&amp; git commit -m &quot;feat: 增加导出功能&quot;git push -u origin feature/xxx# ③ 网页上创建 Pull Request（一个 PR 只做一件事，关联 Issue 用 Closes #42）# ④ Code Review：评论 / 通过 / 要求修改# ⑤ 合并：Merge Commit / Squash / Rebase 三种方式，按团队规则选
+
+合并方式的差别值得说一下：
+
+Merge Commit：保留全部提交记录和合并节点，历史完整但线条多；
+Squash：把分支里的多个提交压成一条并进 main，main 的历史干净，适合”开发过程一团乱、结果要整洁”的场景；
+Rebase：把分支提交逐条挪到 main 顶端，线性历史，但对提交规范要求最高。
+
+Review 环节有三种状态：Comment（评论，不阻塞合并）、Approve（通过）、Request Changes（要求修改，阻塞合并直到改完）。
+写 PR 有几个实用的经验：一个 PR 只做一件事，标题写清做什么，描述里放复现步骤或截图，CI 没过先别喊人看。曾经有个项目 PR 里塞了三个功能的改动，审查的人直接退回要求拆成三个——这不算刁难，是为了出问题时能精准回滚。
+五、分支保护：main 的最后防线协作项目里，main 分支必须设保护规则，不然”误推覆盖”是迟早的事。GitHub 的分支保护常用选项（GitLab 里对应 Protected branches）：
+
+
+
+保护选项
+作用
+建议
+
+
+
+Require a PR before merging
+所有改动必须走 PR
+必开
+
+
+Require approvals
+需要指定人数审查通过
+至少 1 人
+
+
+Dismiss stale reviews
+有新提交时旧审查自动失效
+推荐
+
+
+Require status checks
+必须通过 CI 检查才能合并
+推荐
+
+
+Do not allow bypassing
+管理员也不能绕过
+推荐
+
+
+依赖这些规则之后，我自己的起手式就变成了：新仓库先拉保护规则，再接 CI，最后才邀请协作者。
+安全相关的功能也顺手记一下：
+
+Dependabot：自动检测依赖漏洞并创建修复 PR；
+Secret Scanning：扫描仓库里泄露的密钥（Token、私钥等 200 多种模式）；
+CodeQL：代码安全分析，偏静态扫描。
+
+运维视角最重要的一条：密钥一旦进了仓库，删除文件是不够的——历史里还在，平台扫描照样会报。正确姿势是立即去服务端撤销并轮换密钥，然后再清理 git 历史，顺序不能反。
+六、GitHub Actions 最小入门GitHub Actions 是 GitHub 内置的 CI&#x2F;CD。结构上：事件（push&#x2F;PR&#x2F;定时）触发 Workflow，一个 Workflow 包含多个 Job，Job 里跑多个 Step。
+概念和 GitLab CI 对得上：Workflow ≈ Pipeline，Job ≈ Job，Step ≈ Script。写过一个就能看懂另一个。
+# .github/workflows/ci.yml 最小示例name: CI Pipelineon:  push:    branches: [main]jobs:  build-and-test:    runs-on: ubuntu-latest    steps:      - uses: actions/checkout@v4      - uses: actions/setup-node@v4        with:          node-version: 18      - run: npm ci      - run: npm test
+
+这段配置放进去，每次推 main 就会自动拉代码、装 Node、跑测试。工作里它的价值是：把”合并前必须跑通”这件事从口头约定变成机器执行。
+密钥管理走 Repository secrets &#x2F; Organization secrets &#x2F; Environment secrets 三级，日志里自动打码，但仍然有个原则：禁止用 echo 把 Secret 打印出来调试，打码不是绝对可靠的。
+一个对比感受：GitHub Actions 是 SaaS，开箱即用但机器在别人那里；GitLab 的 Runner 是自己部署的，脏活累活（装 Docker、扩机器、排网络）都是运维的活。这也是为什么企业里 CI&#x2F;CD 平台的维护归运维。
+收尾的一点感受GitHub 用熟的关键是把三件事串起来：分支保护挡住误操作，PR 流程留下审查记录，Actions 保证合并的都是过了测试的代码。这三样配齐，才算把 GitHub 从”代码网盘”用成了协作平台。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Git</tag>
+        <tag>GitHub</tag>
+        <tag>CI/CD</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>GitLab CI/CD 落地：Runner 注册与流水线模板实战</title>
+    <url>/2024/03/13/GitLabCICD%E8%90%BD%E5%9C%B0Runner%E4%B8%8E%E6%B5%81%E6%B0%B4%E7%BA%BF%E6%A8%A1%E6%9D%BF/</url>
+    <content><![CDATA[GitLab CI&#x2F;CD 落地：Runner 注册与流水线模板实战上一篇文章里 GitLab 平台已经跑起来了，但开发还在找我手动拉代码、打包、传服务器。有次周五下午发版，我连做了六次”拉码、打包、scp、解压、换软链”，第七次是回滚。当天晚上我就把流水线搭了起来——人肉发布这件事，重复三次以上就该交给机器。
+一、GitLab CI 的基本模型GitLab CI&#x2F;CD 的逻辑不复杂：
+
+代码仓库里放一个 .gitlab-ci.yml 文件，描述”要做什么”；
+Runner 是执行这些任务的代理，注册到 GitLab 之后领任务、干活、回报结果；
+推送代码或创建 MR 触发流水线，按阶段顺序执行。
+
+三个角色的分工：GitLab 负责调度，Runner 负责执行，yml 文件负责定义流程。运维的活主要在两块：把 Runner 管好，把 yml 模板写好给开发用。开发不需要懂 Runner 装在哪，只要知道”推代码之后跑去哪看结果”。
+二、Runner 的注册与执行器选择Runner 可以注册在三个级别：项目级、组级、实例级。项目级最省事，实例级最通用，企业里一般按”组级 + 标签区分用途”来铺。
+# 1. 注册（在 Runner 所在机器上执行）#    token 来源：项目 → Settings → CI/CD → Runnersgitlab-runner register# 交互项：GitLab 地址 http://10.0.8.200:8090#         token、描述、标签（如 deploy、test）、执行器
+
+执行器（executor）的选择我踩过一次坑，值得展开说：
+
+
+
+执行器
+特点
+适用场景
+
+
+
+shell
+直接跑在 Runner 机器上，起步最快
+简单构建，但环境互相污染
+
+
+docker
+每个任务一个容器，环境隔离
+大多数场景推荐
+
+
+kubernetes
+跑在 K8s 集群里，弹性扩缩
+大型团队、构建量大
+
+
+一开始我用 shell 执行器图省事，结果两个项目依赖的 Node 版本打架，构建时好时坏。换成 docker 执行器之后，每个任务生成一个干净容器，这类玄学问题直接消失。”环境隔离”这四个字，值这一次改造。
+给 Runner 打标签是为了分流：镜像构建的活儿给标签 build 的 Runner，部署任务给标签 deploy 的 Runner——生产部署的 Runner 可以放到内网、单独配权限，构建的放外边跑，互不影响。
+# 2. 状态检查三连，排障时常用gitlab-runner statusgitlab-runner verify          # 验证和 GitLab 的连通性gitlab-runner list            # 列出所有已注册的 Runner
+
+三、.gitlab-ci.yml 模板逐段拆解这份模板是给开发的标准件，我一般直接放进项目根目录：
+stages:            # 流水线阶段，按顺序执行  - build  - test  - deploybuild-job:         # 构建：编译 + 打镜像  stage: build  tags: [build]    # 指定带 build 标签的 Runner 执行  script:    - echo &quot;编译代码&quot;    - docker build -t registry.example.com/app:$CI_COMMIT_SHORT_SHA .    - docker push registry.example.com/app:$CI_COMMIT_SHORT_SHA  only:    - main         # 只在 main 分支触发test-job:          # 测试：单元测试 / 代码检查  stage: test  tags: [test]  script:    - echo &quot;运行测试&quot;deploy-job:        # 部署：推送到测试 / 生产环境  stage: deploy  tags: [deploy]  script:    - echo &quot;部署到服务器&quot;  when: manual     # 生产环境手动确认，防手滑  only:    - main
+
+几个关键点：
+
+stages 定义阶段顺序，同一阶段的 Job 并行，前一阶段全绿才进下一阶段；
+tags 决定这个 Job 由哪台 Runner 执行，写错标签的直接后果是任务一直挂着不跑——这是新人最常问的”为什么流水线卡住了”的原因之一；
+only: main 限定触发分支，避免 feature 分支一推就触发部署；
+when: manual 给生产部署加一道人工闸门，点一下才执行。
+
+镜像标签用 $CI_COMMIT_SHORT_SHA 是我坚持的规范：每次构建的镜像都可以追溯到具体提交，出问题能精确定位到”哪一次构建、哪一次提交”，比 latest 标签靠谱得多。
+四、变量与密钥管理# 项目 → Settings → CI/CD → Variables# 存数据库密码、部署密钥这类敏感信息，勾选 Protected + Masked
+
+三条红线：
+
+敏感信息一律走 CI&#x2F;CD Variables，禁止写死在 .gitlab-ci.yml 里——yml 是跟代码一起进仓库的，写密码等于把密码提交进 git 历史；
+变量勾 Protected 之后，只有保护分支上的流水线能读到，feature 分支拿不到生产凭据；
+Masked 让日志自动打码，但别依赖它——调试时 echo $DB_PASSWORD 这种动作一旦习惯化，迟早出事。
+
+五、日常运维的三个高频问题Runner 离线。处理顺序：gitlab-runner status 看进程 → gitlab-runner verify 测连通 → 检查机器负载和网络到 GitLab 的通路 → 确认注册 token 没被清理。最隐蔽的一种是 token 被管理员重置后没重新注册，表现是”进程在跑但一直不领任务”。
+流水线卡住不执行。先看是不是 tags 写错或者对应 Runner 全忙：Runner 的并发数（config.toml 里的 concurrent）是固定的，一个 Runner 同时只接有限个任务，构建高峰时会排队。第二个常见原因是磁盘满——Runner 机器被构建缓存和镜像撑爆，任务起不来。
+构建慢。三个方向：加 cache 关键字缓存依赖目录；换更大的 Runner 机器；给 Docker 配镜像加速。构建时间从 8 分钟压到 3 分钟那次，主要收益就来自依赖缓存。
+小结GitLab CI 落地就三件事：Runner 用 docker 执行器保证环境干净、yml 模板把阶段和触发条件写死、密钥全部进 Variables。这三步做完，开发侧的体验就是”推代码 → 看结果”，运维侧也不用再当人肉发布机。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>CI/CD</tag>
+        <tag>GitLab</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>GitLab 运维实战：部署、权限模型与备份恢复</title>
+    <url>/2024/02/20/GitLab%E8%BF%90%E7%BB%B4%E5%AE%9E%E6%88%98%E9%83%A8%E7%BD%B2%E6%9D%83%E9%99%90%E4%B8%8E%E5%A4%87%E4%BB%BD%E6%81%A2%E5%A4%8D/</url>
+    <content><![CDATA[GitLab 运维实战：部署、权限模型与备份恢复第一次接手 GitLab 是入职第二个月，前任运维交接时说了一句”这平台平时不用管，坏了再说”。结果第三周磁盘就写满了——仓库备份和日志把根分区撑爆，全组开发停工半天。从那以后我给 GitLab 定了两条规矩：磁盘单独挂盘并设监控，备份每天跑并且每月做一次恢复演练。这篇就是这套维护工作的完整记录。
+一、运维和开发在 Git 上不是一回事同样是用 Git，职责完全不同：
+
+
+
+维度
+开发工程师
+运维工程师
+
+
+
+角色
+Git 的使用者
+平台的维护者 + 规范制定者
+
+
+日常
+写代码、提交、分支、合并、解冲突
+部署维护 GitLab、管权限、备份恢复、配 Runner
+
+
+关心点
+我的代码能不能提交合并
+平台稳不稳、权限对不对、能不能审计
+
+
+典型操作
+add &#x2F; commit &#x2F; push &#x2F; merge
+gitlab-ctl、gitlab-rake、备份恢复
+
+
+输出
+业务代码
+流水线模板、分支规范、审计记录
+
+
+落到日常工作里，运维侧大概有这几块：
+
+GitLab 平台运维：安装升级、备份恢复、磁盘监控；
+用户与权限：对接 LDAP&#x2F;AD，配置群组和项目权限；
+Runner 管理：注册执行器、打标签、区分不同环境的构建；
+代码质量门禁：分支保护、强制 MR 审批、必须通过流水线才能合并；
+CI&#x2F;CD 建设：写 .gitlab-ci.yml 模板、管构建产物、配 CI&#x2F;CD 变量；
+发布与回滚：合并 main 自动部署，出问题 revert 回滚；
+规范设计：分支模型、MR 审查流程、.gitignore 与 Git LFS 管理。
+
+二、先看清 GitLab 的组件地图GitLab 是一个 Ruby&#x2F;Rails 应用，单机安装也含七八个组件，排障的时候知道”哪个症状对应哪个组件”能省掉一半时间：
+
+
+
+组件
+作用
+运维关注点
+
+
+
+nginx
+静态 Web 入口
+external_url 决定访问地址和端口
+
+
+gitlab-workhorse
+轻量反向代理
+大文件上传 &#x2F; 下载加速
+
+
+unicorn &#x2F; puma
+Rails 应用服务
+502 的常见来源，先看它的日志
+
+
+postgresql
+主数据库
+备份恢复的核心
+
+
+redis
+缓存 &#x2F; 队列
+Sidekiq 依赖它
+
+
+sidekiq
+异步后台任务
+队列堆积会拖慢全站
+
+
+gitaly
+Git 仓库存储（RPC）
+占磁盘大头，git 操作慢先查它
+
+
+三、部署与关键配置生产环境建议起步 4C8G，磁盘按仓库增长规划——我吃过的亏就是没给仓库单独挂盘。
+# 1. 环境准备systemctl disable firewalld            # 或按需放行端口sed -i &#x27;s/SELINUX=enforcing/SELINUX=disabled/&#x27; /etc/selinux/config# 2. 安装（rpm 方式）yum -y install policycoreutils-python curlcurl -s https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.rpm.sh | bashyum -y install gitlab-ce              # 离线环境用 rpm -ivh gitlab-ce-16.9.8-ce.0.el7.x86_64.rpm
+
+然后是 /etc/gitlab/gitlab.rb 里几个必改项：
+external_url &#x27;http://10.0.8.200:8090&#x27;         # 访问地址和端口nginx[&#x27;listen_port&#x27;] = 8090                    # 强制 Nginx 端口，避免和宿主服务打架gitlab_rails[&#x27;gitlab_shell_ssh_port&#x27;] = 2222   # SSH 克隆端口，22 被占用时用这个# 备份路径与保留时间（这两个不配，早晚磁盘告警）gitlab_rails[&#x27;backup_path&#x27;] = &#x27;/data/backup/gitlab&#x27;gitlab_rails[&#x27;backup_keep_time&#x27;] = 604800      # 保留 7 天
+
+# 3. 生效并自检gitlab-ctl reconfiguregitlab-ctl status                            # 所有组件状态gitlab-rake gitlab:check SANITIZE=true       # 全量自检# 常用命令gitlab-ctl restartgitlab-ctl stop nginx                        # 单独停某个组件gitlab-ctl tail                              # 看全部日志gitlab-ctl tail postgresql                   # 看指定组件日志
+
+初始密码在 /etc/gitlab/initial_root_password，24 小时后会被自动删除，第一次登录必须马上改密码，否则就只能 gitlab-rake &quot;gitlab:password:reset&quot; 来救了。
+还有一个容易漏的开关：Webhook 要回调内网地址时，需要在”管理中心 → 设置 → 网络”里允许本地网络请求，否则推送事件根本发不出去。
+四、代码怎么进 GitLab两种常见方式，第一条是克隆空仓库再放代码，日常最省事：
+# 方式一：克隆空仓库 → 拷贝代码 → 提交推送（克隆自带远程地址）git clone git@10.0.8.200:ops/game.gitcd game/# 放代码（上传压缩包解压或直接拷贝）git add .git commit -m &quot;game_v1&quot;git push -u origin master# 方式二：本地已有仓库 → 关联远程 → 推送mkdir git_data &amp;&amp; cd git_data/git inittouch a.txt &amp;&amp; git add . &amp;&amp; git commit -m &quot;test_v1&quot;git remote add origin git@10.0.8.200:ops/game.gitgit push -u origin master
+
+SSH 公钥贴到”右上角头像 → Preferences → SSH Keys”，之后就免密推送了。
+五、权限模型：用户 → 组 → 项目GitLab 的权限核心是”用户 → 组 → 项目”三层，角色分 5 级：
+
+
+
+角色
+权限
+典型对象
+
+
+
+Guest
+只能看 Issue，看不了代码
+客户、外包旁观
+
+
+Reporter
+看代码、提 Issue
+测试、产品
+
+
+Developer
+推分支、提 MR，不能直接推 main
+开发
+
+
+Maintainer
+管项目设置、合并 MR、打 Tag
+技术组长
+
+
+Owner
+项目全部权限
+项目负责人 &#x2F; 运维
+
+
+生产环境的落地姿势：
+
+按部门建组，比如 ops 组、dev 组，再在组内建项目，项目权限默认继承组；
+开发给 Developer、组长 Maintainer、运维 Owner&#x2F;Admin；
+对接 LDAP&#x2F;AD，账号统一从企业目录同步，禁止手工建号；
+main 分支开保护（Protected branches），开发推 main 直接拒绝，必须走 MR。
+
+一个完整协作流程的样子（用 dev 账号走一遍）：
+# dev 用户在自己机器上克隆并配置提交身份git clone git@10.0.8.200:ops/game.gitgit config --global user.email &quot;dev@example.com&quot;git config --global user.name &quot;dev&quot;# 改代码后直接推 master 会被拒（分支保护生效）→ 建自己的分支推git switch -c devgit commit -am &quot;首页改版&quot;git push -u origin dev# 网页上发起 MR → 由 root/Maintainer 审查合并 → 删除源分支
+
+这个”先被拒绝、再走 MR”的流程我建议在给新人开账号时当面演示一次，比发文档有效——自己撞一次分支保护，比看十遍规则记得牢。另外注意克隆方式：git@ 走 SSH 免密，http:// 方式每次要输账号密码，给部署脚本用的时候别搞混。
+六、代码审计：这份活到底谁干“审计开发的提交是不是运维的活”这个问题，分工是清楚的：运维搭平台和流程，代码内容由技术组长 &#x2F; 资深开发审查。
+
+
+
+审计层面
+谁负责
+做什么
+
+
+
+代码内容审查（Code Review）
+技术组长 &#x2F; 资深开发
+审查 MR 的代码质量、逻辑、安全
+
+
+提交规范审计
+运维 + 自动检查
+提交信息格式、禁止密钥入库、限制大文件
+
+
+操作行为审计（Audit Events）
+运维
+谁登录了、谁改了权限、谁删了分支
+
+
+合规审计
+运维
+审计日志留存、操作留痕可追溯
+
+
+运维侧要落地的几件事：
+# 1. 审计事件：管理中心 → 审计事件，登录、权限变更、项目删除、分支保护变更都能查#    定期导出归档（等保场景日志留存 6 个月起步）# 2. 提交规范自动化：用 Push Rules 配提交信息正则，或 pre-receive 钩子拦截# 3. MR 审批强制：main 分支保护 + 至少 1 人审批 + 流水线必须通过# 4. 密钥防护：开启 Secret Detection，发现泄露先轮换密钥再清历史# 5. 用 git log 审计具体改动：git log --since / --author
+
+七、备份与恢复：每月必须演练一次备份这件事的定义很简单：没验证过能恢复的备份等于没有备份。
+# 1. 手动备份（仓库 + 数据库 + 附件）gitlab-rake gitlab:backup:create# 产物在 /var/opt/gitlab/backups/，形如 EPOCH_日期_版本_gitlab_backup.tar# 2. 定时备份（crontab 每天凌晨 2 点）0 2 * * * /opt/gitlab/bin/gitlab-rake gitlab:backup:create CRON=1# 3. 恢复（只能恢复到与备份相同的 GitLab 版本！）gitlab-ctl stop unicorn sidekiq      # 停掉数据写入服务gitlab-rake gitlab:backup:restore BACKUP=1700000000_2024_02_20_16.9.8# 交互确认会提示会删除现有数据重建gitlab-ctl restartgitlab-rake gitlab:check SANITIZE=true# 4. 迁移到新服务器 = 备份 + 恢复，这是最稳妥的迁移方式
+
+三个必须记住的坑：
+
+备份不包含 /etc/gitlab/gitlab.rb，配置文件要单独备份；
+跨版本恢复不行，升级前先备份，恢复前确认版本号一致；
+backup_keep_time 控制保留份数，磁盘要按备份量规划——建议备份目录单独挂盘。
+
+我的实际做法是：每天自动备份，每周人工看一眼备份文件大小是否正常，每月在测试环境恢复一次确认数据完整。第三步才是真正兜底的那步。
+八、升级与 HA 的取舍升级的官方硬规矩：只能跨 2 个次要版本。14.x 要先升 15.x 再升 16.x，不能一步跳过去。
+# 升级流程# 1. 备份当前版本（升级前必做）# 2. 停服务：gitlab-ctl stop unicorn sidekiq# 3. 装新包：yum -y install gitlab-ce-16.x.x# 4. 生效：gitlab-ctl reconfigure &amp;&amp; gitlab-ctl restart# 5. 验证：gitlab-rake gitlab:check，再跑一遍关键流程（登录、克隆、推送）
+
+HA 方面的建议就一条：不要一上来就堆 HA。单机版撑 500 用户以内没问题；规模上来再考虑 PostgreSQL&#x2F;Redis 外置、应用多节点、Gitaly 集群。复杂度上去了，故障模式也跟着翻倍，先把”备份 + 恢复演练”做扎实，比什么高可用都实在。
+九、常见故障排查
+
+
+故障
+常见原因
+处理路径
+
+
+
+页面 502
+unicorn&#x2F;puma 挂了、内存不足、磁盘满
+gitlab-ctl status → tail unicorn → free -h &#x2F; df -h
+
+
+git 操作超时卡死
+Gitaly 异常、仓库过大、磁盘 IO 高
+tail gitaly → df -h → du -sh 仓库目录
+
+
+提交被拒
+分支保护、无推送权限
+查分支保护规则，改走 MR
+
+
+Runner 离线
+机器故障、token 失效、网络不通
+gitlab-runner verify → 重新 register
+
+
+克隆报 Permission denied
+SSH 密钥没配或换了机器
+ssh -T 测试 → 重新贴公钥
+
+
+仓库越来越大
+大文件入库、没跑 GC
+git gc、配置 Git LFS、限制 push 大小
+
+
+磁盘满告警
+备份&#x2F;日志&#x2F;仓库增长
+df -h 定位 → 清理旧备份 → 日志轮转
+
+
+排障三板斧，顺序别乱：
+gitlab-ctl status                      # 1. 先看哪个组件 down 了gitlab-ctl tail &lt;组件名&gt;               # 2. 看对应组件日志（unicorn/postgresql/gitaly/redis）gitlab-rake gitlab:check SANITIZE=true # 3. 全量自检df -h &amp;&amp; free -h &amp;&amp; top                # 资源三连，90% 的&quot;平台慢&quot;最后都落在磁盘或内存上
+
+最后维护 GitLab 这类平台，日常动作其实不多，但每一项都要按规矩来：权限最小化、备份加演练、升级别跳版本、排障先看 status 和日志。平台本身不难，难的是把这些动作坚持成习惯——这类基础设施出一次事，全组都跟着停摆。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>GitLab</tag>
+        <tag>备份</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Git 核心原理与命令实战：三区模型、回退与冲突处理</title>
+    <url>/2024/01/11/Git%E6%A0%B8%E5%BF%83%E5%8E%9F%E7%90%86%E4%B8%8E%E5%91%BD%E4%BB%A4%E5%AE%9E%E6%88%98/</url>
+    <content><![CDATA[Git 核心原理与命令实战：三区模型、回退与冲突处理我最初对 Git 的态度和很多人一样：会 add、会 commit、会 push，就觉得够用了。直到有次改错了仓库里的配置文件需要回退，我在 reset 和 revert 之间犹豫了半天，最后选了 reset 强推上去，顺手把同事当天的一条提交也干掉了。那次之后我把 Git 的底层模型认真补了一遍，就是这篇的内容。
+一、Git 解决的是什么问题Git 是分布式版本控制系统。它记录文件内容的变化，可以回退到任意历史版本、对比差异、多人协作不互相覆盖，并且追踪每次修改的作者和时间。
+它和 SVN 这类集中式的核心区别在”副本”上：
+
+
+
+对比项
+集中式（SVN）
+分布式（Git）
+
+
+
+版本库位置
+只在中央服务器
+每个开发者都有完整副本
+
+
+离线操作
+只能查看，不能提交
+可以提交、建分支、看历史
+
+
+单点故障
+服务器挂了全员停摆
+任何一份克隆都能恢复
+
+
+分支成本
+昂贵，相当于复制目录
+极低，本质只是加一个指针
+
+
+速度
+依赖网络
+大部分操作在本地完成
+
+
+工作里有个直观的体现：SVN 时代回滚要连服务器、要权限；Git 时代我在本地就能把整个历史翻个底朝天，出问题不慌。Git 存的是完整快照，不是差异——文件没变，就只保留一个指向前一版本的链接，所以它才敢”每个提交都是全量状态”。
+二、三区模型：所有命令都能对上位置学 Git 最大的分水岭是搞懂三个区。搞懂了，命令就不用背，靠推理就能想出来：
+工作区（正在编辑的文件）    │  git add    ▼暂存区 Index（准备提交的快照清单）    │  git commit    ▼本地仓库 .git（永久快照历史）    │  git push    ▼远程仓库（GitLab / GitHub）
+
+
+工作区：我正在编辑的目录；
+暂存区：git add 之后、还没提交的内容，相当于”这一版要提交哪些文件”的清单；
+本地仓库：git commit 之后进入 .git 的完整历史。
+
+文件对应四种状态：Untracked（未跟踪）→ git add → Staged（已暂存）→ git commit → Committed（未修改）→ 再编辑 → Modified（已修改）。
+git status -s 的输出符号值得记一下，排障时全靠它：
+
+
+
+标志
+含义
+
+
+
+??
+未跟踪的新文件
+
+
+A
+已暂存的新增文件
+
+
+M
+左列已暂存修改，右列未暂存修改
+
+
+D
+删除
+
+
+UU
+合并冲突，未解决
+
+
+三、日常操作链路# 初始化与克隆git init                                    # 当前目录创建仓库git clone git@gitlab.example.com:ops/app.git    # SSH 克隆git clone -b develop git@gitlab.example.com:ops/app.git   # 指定分支git clone --depth 1 git@gitlab.example.com:ops/app.git    # 浅克隆，大仓库拉取快很多# 提交链路git status -s                               # 看状态git add index.html                          # 单文件；git add . 全部；git add -p 交互式挑选git commit -m &quot;feat(user): 增加登录校验&quot;     # 提交git commit -am &quot;fix: 修正 listen 端口&quot;       # 跳过 add，提交已跟踪文件git push -u origin main                     # 首次推送并设上游，之后直接 git push
+
+提交信息这件事，团队里最好一开始就定规矩：type(scope): 描述，type 用 feat &#x2F; fix &#x2F; docs &#x2F; style &#x2F; refactor &#x2F; test &#x2F; chore &#x2F; perf &#x2F; ci &#x2F; revert。运维改动的仓库我一般直接用 OPS: 前缀，比如 OPS: 调整 nginx upstream 配置——以后用 git log --grep 筛运维改动时非常省事。
+四、配置与 SSH 密钥配置分三层，优先级是 本地 &gt; 全局 &gt; 系统：
+git config --global user.name &quot;Your Name&quot;git config --global user.email &quot;you@example.com&quot;git config --global init.defaultBranch maingit config --list                           # 查看全部生效配置# 运维常用git config --global core.autocrlf input     # Linux/Mac 换行符处理，Windows 用 truegit config --global http.proxy http://proxy.example.com:8080   # 内网拉外网代码git config --global core.sshCommand &quot;ssh -i ~/.ssh/id_ed25519_gitlab&quot;  # 指定私钥git config --global alias.lg &quot;log --oneline --graph --all&quot;     # 别名
+
+SSH 密钥现在推荐 ed25519，比 RSA 短、更安全：
+ssh-keygen -t ed25519 -C &quot;you@example.com&quot;cat ~/.ssh/id_ed25519.pub        # 公钥贴到 GitLab/GitHub 的 SSH Keys 页面ssh -T git@gitlab.example.com    # 测连通性
+
+两个高频报错的排查方向，记下来能省不少时间：
+
+Permission denied (publickey)：先 ssh -T 测密钥，多半是公钥没配或换了机器；
+LF will be replaced by CRLF：检查 core.autocrlf，Windows 和 Linux 混着提交时最容易出。
+
+五、历史、差异与回退# 查看历史git log --oneline --graph --all --decorate   # 图形化看全历史git log --since=&quot;2024-03-01&quot;                 # 按时间过滤，线上出事定位&quot;谁改了什么&quot;git log --author=&quot;zhangsan&quot; --onelinegit show &lt;commit-id&gt;                         # 看某次提交的完整差异# 查看差异git diff                     # 工作区 vs 暂存区git diff --staged            # 暂存区 vs 最新提交git diff main..develop       # 两个分支比git diff HEAD --name-only    # 只看改了哪些文件# 撤销与回退git checkout -- app.conf     # 丢弃工作区修改（不可恢复，手要稳）git reset HEAD app.conf      # 从暂存区拿出来，保留修改git reset --soft HEAD~1      # 撤销最近一次 commit，改动留在暂存区git reset --hard HEAD~2      # 彻底回退两个版本（危险）git revert &lt;commit-id&gt;       # 生成一条反向提交，安全回滚git reflog                   # 所有指针移动历史，数据恢复的安全网
+
+这里有一条生产铁律，也是我那次翻车换来的：已经推送到远程的提交，回滚一律用 revert，不用 reset。reset 会重写历史，别人仓库里对不上号，麻烦比原来的问题还大。reset 只用在本地、没推过的提交上。
+另外一个值得练的习惯：回退前先 git log --oneline -5 确认自己在哪个位置，回退目标是什么。误操作大多不是命令不会敲，而是根本没看清当前位置。
+六、分支管理与工作流分支的本质是”指向某个提交的可变指针”，创建分支只是新建一个指针，所以非常轻量。
+git branch                       # 本地分支git branch -a                    # 本地 + 远程git switch -c feature/login      # 创建并切换（老写法 checkout -b）git branch -d feature/login      # 安全删除，未合并会报错git branch -D feature/login      # 强制删除git push origin --delete feature/login   # 删远程分支git fetch --prune                # 清理本地对已删除远程分支的引用
+
+分支命名我见过两种典型风格，推荐带上用途和编号，看着就知道这条分支在干嘛：
+feature/JIRA-123-user-login   # 新功能bugfix/JIRA-456-fix-crash     # Bug 修复hotfix/urgent-security-patch  # 紧急修复，从 main 直接拉release/v2.1.0                # 发布分支
+
+团队工作流常见三种，选型看发布节奏：
+
+
+
+策略
+分支模型
+适用场景
+复杂度
+
+
+
+Git Flow
+main + develop + feature + release + hotfix
+有明确发布周期的项目
+高
+
+
+GitHub Flow
+main + feature，合并即部署
+持续部署的 Web 项目
+低
+
+
+Trunk-Based
+所有人直接提交 main，短命分支
+高频发布、CI&#x2F;CD 成熟的团队
+中
+
+
+我经手的两个项目就是两个极端：老项目用 Git Flow，发布节奏一月一次；新项目 GitHub Flow，随时合并随时上线。选错的代价很直接——小团队硬上 Git Flow，光流程成本就够喝一壶。
+七、合并与冲突处理合并有三种模式，日常最需要记住的是 --no-ff：
+git merge feature/login           # 默认 fast-forward，指针直接前移git merge --no-ff feature/login   # 强制生成合并提交，保留分支拓扑（团队推荐）git merge --squash feature/login  # 把分支压缩成一条提交，再手动 commitgit merge --abort                 # 放弃合并，回到合并前
+
+fast-forward 的缺点是分支信息没了，以后看历史不知道这段代码从哪条分支来；--no-ff 会生成一条合并提交，历史里能看出”这里合并过一个功能分支”。团队协作场景我一般要求开 --no-ff。
+冲突的产生条件很明确：两个分支改了同一文件的同一处，Git 无法自动裁决。冲突文件里的标记长这样：
+&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD当前分支（HEAD）的内容=======传入分支（feature/login）的内容&gt;&gt;&gt;&gt;&gt;&gt;&gt; feature/login
+
+解决流程六步：合并出现 CONFLICT → git status 找到冲突文件（UU 标记）→ 编辑文件、删掉标记保留正确内容 → git add 标记已解决 → git commit 完成合并 → 后悔就 git merge --abort。
+# 列出冲突文件git diff --name-only --diff-filter=U# 配图形化工具解冲突git config --global merge.tool vscodegit mergetool
+
+冲突不止 merge 一种场景，这是我踩过才整理全的：
+
+
+
+场景
+触发命令
+解决方式
+
+
+
+merge 冲突
+git merge feature
+改文件 → git add → git commit
+
+
+rebase 冲突
+git rebase main
+改文件 → git add → git rebase –continue
+
+
+cherry-pick 冲突
+git cherry-pick xxx
+改文件 → git add → git cherry-pick –continue
+
+
+pull 冲突
+git pull
+改文件 → git add → git commit，或先 stash 再 pull
+
+
+stash pop 冲突
+git stash pop
+改文件 → git add → git stash drop（记录不会自动删）
+
+
+二进制文件冲突
+两分支都改了 png&#x2F;jar
+无法合并内容，只能选一侧或重新生成
+
+
+二进制冲突没法”改文件”，只能二选一：
+git checkout --ours  app.jar    # 保留当前分支版本git checkout --theirs app.jar   # 保留合并进来分支的版本git add app.jar &amp;&amp; git commit
+
+解决冲突后有个动作绝不能省：本地编译 &#x2F; 测试跑一遍再提交。冲突标记删干净只是格式上对了，逻辑可能已经被改得前后矛盾——我见过一次合并后登录模块直接失效，就是两边各保留了一半的校验逻辑。
+八、远程仓库与几个救场命令git remote -v                                    # 看远程地址git remote set-url origin git@gitlab.example.com:ops/app.git   # 换域名后改地址# fetch vs pullgit fetch origin            # 只下载不合并，先看看再决定（安全）git merge origin/main       # 确认后再合并git pull origin main        # = fetch + mergegit pull --rebase           # 用 rebase 代替 merge，历史更线性# 推送git push -u origin feature/logingit push --force-with-lease origin main   # 安全强推：远程有新提交会拒绝
+
+几个高频救场命令：
+# rebase：把当前分支的提交&quot;移植&quot;到新基点上，历史线性但会重写 SHAgit switch feature/login &amp;&amp; git rebase main# 冲突时：解决 → git add → git rebase --continue；放弃：git rebase --abort# cherry-pick：把某个提交单独摘到当前分支，hotfix 场景常用git cherry-pick a3f5b2cgit cherry-pick -x a3f5b2c        # 保留原始提交号标注，方便追溯# stash：临时保存未完成的工作，切分支修 bug 前用git stash push -m &quot;WIP: 登录功能&quot;git stash listgit stash pop                     # 恢复并删除记录# tag：版本发布标记git tag -a v1.0.0 -m &quot;正式版&quot;git push origin --tags            # 标签默认不推送，必须显式推
+
+两条经验规则：永远不要 rebase 已推送到远程的公共分支（历史重写会让所有人对不上）；永远不要对公共分支用 --force，真要强推就用 --force-with-lease，它会在远程有新提交时拒绝覆盖。发布时打 tag 配合平台的 Release 功能，回滚目标一目了然。
+九、图形化工具要不要用命令行是基本功，但图形化工具在两类场景下确实好用：看分支拓扑、给不熟命令行的同事演示。SourceTree 这类工具内置了图形化历史视图和冲突对比界面，排查”谁在什么时候改了什么”比 git log --graph 直观。注意 Windows 上装完默认用 PuTTY 的 SSH，如果之前用 Git Bash 生成过密钥，要在设置里把 SSH 客户端切成 OpenSSH，否则会报 host key 相关的认证失败。
+不过服务器上操作永远以命令行为主，GUI 只是本机辅助。
+小结回退类操作的选择可以浓缩成一句话：工作区改错了用 checkout --，暂存区放错了用 reset HEAD，提交错了但没推用 reset，推出去的用 revert。把这句话记住，再配合”动手前先 git status 和 git log 看一眼”，Git 的事故率会下降一大截。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Git</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Jenkins 流水线实战：拉码、构建、发布与企微通知</title>
+    <url>/2024/04/21/Jenkins%E6%B5%81%E6%B0%B4%E7%BA%BF%E5%AE%9E%E6%88%98%E6%8B%89%E7%A0%81%E5%8F%91%E5%B8%83%E4%B8%8E%E4%BC%81%E5%BE%AE%E9%80%9A%E7%9F%A5/</url>
+    <content><![CDATA[Jenkins 流水线实战：拉码、构建、发布与企微通知Jenkins 装好、SonarQube 能扫之后，我把整条链路串了一遍：开发推代码到 GitLab，Jenkins 自动拉取、扫描、打包，分发到 WEB 服务器完成切换，最后往企业微信群里发一条通知。这篇文章把这套流程的每一段拆开讲清楚，包括那个”软链切换”的发布方案——它是整条链路里最值得抄走的设计。
+一、先看整条链路的全貌开发 push 代码   │   ▼GitLab 仓库 ── webhook 触发 ──► Jenkins                                  │  1. 拉取代码（SSH 密钥）                                  │  2. SonarQube 代码扫描                                  │  3. 打包 tar.gz                                  ▼                             scp 分发到 WEB 服务器                                  │  4. 解压到按时间命名的目录                                  │  5. 软链 html → 新版本目录（秒级切换）                                  ▼                             企业微信通知构建结果
+
+技术含量不在”自动化”三个字，而在几个细节：发布目录按时间命名可追溯、软链切换可秒回滚、扫描和通知都挂在同一条流水线上。
+二、让 Jenkins 能拉到 GitLab 的代码先在 GitLab 建好仓库、把代码推上去，然后回 Jenkins 操作：
+
+新建自由风格项目，源码管理选 Git，填仓库地址（git@10.0.8.200:ops/game.git）；
+Jenkins 服务器生成密钥对，公钥贴到 GitLab 的 SSH Keys 页面：
+
+ssh-keygen -t rsa -b 2048      # 一路回车cat ~/.ssh/id_rsa.pub          # 复制内容贴到 GitLab
+
+
+第一次手动克隆一次，回答 yes 把主机指纹写进 known_hosts——这步不能省，否则 Jenkins 里构建时卡在指纹确认上：
+
+git clone git@10.0.8.200:ops/game.git /tmp/test_clone   # 输入一次 yes
+
+
+回项目页面点”立即构建”，构建成功后验证工作目录：
+
+ls /var/lib/jenkins/workspace/game_job/# 能看到仓库里的代码文件，说明拉取链路通了
+
+如果项目配置页还在报错，保存退出再重新进一次——页面缓存引起的误报，遇到过两次。
+三、把代码发布到 WEB 服务器WEB 侧先准备好：装 Nginx，站点目录指向 /code/html：
+# web01 上的 Nginx 站点配置server &#123;    listen    80;    server_name localhost;    location / &#123;        root  /code/html;        index index.html index.htm;    &#125;&#125;
+
+然后做 Jenkins 到 WEB 的免密，再写构建脚本：
+ssh-copy-id -i ~/.ssh/id_rsa.pub 10.0.8.7
+
+构建时执行的 Shell，核心是”打包 → 分发 → 解压 → 换软链”四步：
+DATE=$(date +%Y-%m-%d-%H-%M-%S)CODE_DIR=&quot;./&quot;WEB_DIR=&quot;/code&quot;get_code_tar()&#123;    cd $CODE_DIR &amp;&amp; tar zcf /opt/web-$DATE.tar.gz ./*&#125;scp_code_web()&#123;    scp /opt/web-$DATE.tar.gz 10.0.8.7:$WEB_DIR&#125;code_tarxf()&#123;    ssh 10.0.8.7 &quot;cd $WEB_DIR &amp;&amp; mkdir web-$DATE &amp;&amp; tar xf web-$DATE.tar.gz -C web-$DATE&quot;&#125;ln_html()&#123;    ssh 10.0.8.7 &quot;cd $WEB_DIR &amp;&amp; rm -rf html &amp;&amp; ln -s web-$DATE html&quot;&#125;main()&#123;    get_code_tar    scp_code_web    code_tarxf    ln_html&#125;main
+
+这个方案的精妙之处在最后一步：Nginx 始终读 html 这个软链，切换版本只是改指向。
+
+发布：新版本解压到 web-2024-04-21-10-30-00 目录，软链指过去；
+回滚：软链指回上一个目录，一条命令，秒级完成；
+追溯：每个时间戳目录就是一次发布记录，磁盘写不下旧的直接删。
+
+比起”覆盖式”发布（直接往站点目录里覆盖文件），这套方案发布和回滚都是原子操作，不会出现”一半新一半旧”的中间状态。我后来把这套模式复制到了所有静态站点的发布上。
+四、webhook：让一切自动发生前面还要手动点”立即构建”，webhook 把它也省了：
+
+Jenkins 项目里勾选触发器，生成一个 Token 并保存；
+到 GitLab 项目的 Webhooks 设置里，填 Jenkins 地址 http://10.0.8.201:8082/job/game_job/build?token=&lt;你的Token&gt;；
+测试：改一行代码推送到 GitLab，观察 Jenkins 自动开始构建。
+
+验证方法很直接：推代码后去 Jenkins 看构建历史里有没有新的构建记录，有就通了。没通的话先查 GitLab 的网络出口能不能访问到 Jenkins（内网防火墙很常见）。
+五、质量门禁：集成 SonarQube装好扫描器之后，把它挂进项目构建步骤：
+
+系统管理 → 系统设置 → SonarQube Server：填名称、URL http://10.0.8.203:9000、认证 Token（存成 Secret text 类型）；
+全局工具配置：填 sonar-scanner 的安装目录，让 Jenkins 找得到命令；
+项目构建步骤里加”Execute SonarQube Scanner”，指定 projectKey 和扫描目录。
+
+有一个顺序问题必须注意：扫描步骤要放在打包 Shell 的前面。扫描失败（质量不达标）就不该打包分发——这个顺序错了，门禁就形同虚设，代码照样上线。
+六、构建结果通知：企业微信构建完了得让人知道结果，我们用的是企业微信应用消息：
+
+注册企业微信，创建应用，拿到 AgentId 和 Secret，填入通知脚本；
+通知脚本放到 Jenkins 服务器上（如 /server/scripts/jenkins_notify.py），依赖 requests 库；
+本地先单独测一次脚本，确认能发出消息：
+
+pip install requestspython jenkins_notify.py &lt;构建URL&gt; /tmp/changelog.log &lt;项目名&gt;
+
+
+Jenkins 侧安装通知插件，在项目里配置构建后步骤：
+
+echo &quot;==========Start Notify==============&quot;echo $&#123;SCM_CHANGELOG&#125; &gt; /tmp/$&#123;JOB_NAME&#125;_change.logpython /server/scripts/jenkins_notify.py $&#123;BUILD_URL&#125; /tmp/$&#123;JOB_NAME&#125;_change.log $&#123;JOB_NAME&#125;rm -fv /tmp/$&#123;JOB_NAME&#125;_change.log
+
+插件配置里 Entry Format 填 %3$s(at %4$s via %1$s)（提交信息、时间、提交人），Date Format 填 yyyy-MM-dd HH:mm:ss，通知里就能带上”谁、什么时候、改了什么”。
+七、从自由风格到 Pipeline，再到版本发布自由风格项目图形化配置，上手快，但流程一多就乱——构建步骤散在页面里，没法版本化，换台机器就要重新点一遍。Pipeline 的价值就是把流程写成代码，放进仓库跟代码一起管理：
+pipeline &#123;    agent any    stages &#123;        stage(&#x27;拉取代码&#x27;) &#123;            steps &#123; checkout scm &#125;        &#125;        stage(&#x27;代码扫描&#x27;) &#123;            steps &#123;                sh &#x27;sonar-scanner -Dsonar.projectKey=game -Dsonar.sources=.&#x27;            &#125;        &#125;        stage(&#x27;打包分发&#x27;) &#123;            steps &#123; sh &#x27;bash /opt/scripts/deploy.sh&#x27; &#125;        &#125;    &#125;    post &#123;        success &#123; echo &#x27;通知企业微信：构建成功&#x27; &#125;        failure &#123; echo &#x27;通知企业微信：构建失败&#x27; &#125;    &#125;&#125;
+
+最后是版本发布环节。稳定版本打 tag，Jenkins 通过 Git Parameter 插件按标签拉取指定版本：
+# 开发侧：给稳定版本打标签并推送git tag -a v1.0.1 -m &quot;v1.0.1&quot;git push origin v1.0.1
+
+Jenkins 项目里装 Git Parameter 插件，构建时把”参数化构建”的变量换成 Git Parameter，类型选 Tag——之后每次构建都可以从版本列表里选一个 tag 拉取。发布、测试、回滚都能按版本精确操作，不再靠”最新代码碰运气”。
+一点复盘这套链路跑顺之后，发版从”我手动折腾十分钟”变成”开发推代码、两分钟后群里收到通知”。回看整个过程，最值钱的其实是三样东西：软链切换的发布方案、扫描前置的门禁顺序、tag + 参数化的版本管理。工具会换，这三个做法在哪套 CI 里都用得上。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>CI/CD</tag>
+        <tag>Jenkins</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Jenkins 部署与 SonarQube 代码质量平台搭建</title>
+    <url>/2024/04/03/Jenkins%E9%83%A8%E7%BD%B2%E4%B8%8ESonarQube%E4%BB%A3%E7%A0%81%E8%B4%A8%E9%87%8F%E5%B9%B3%E5%8F%B0/</url>
+    <content><![CDATA[Jenkins 部署与 SonarQube 代码质量平台搭建公司内网环境要搭一套 CI，外网源一律不通，所有安装包都得先下载好再传进去。这种”离线两件套”（Jenkins + SonarQube）我装过两遍：第一遍边查文档边试，踩了权限和字体两个坑；第二遍顺手多了，这篇把完整流程整理出来。
+一、为什么是 JenkinsJenkins 是基于 Java 的开源持续集成工具，监控持续重复的工作——拉代码、编译、测试、打包、部署，把这些动作从”人肉按顺序敲”变成”点一下按钮”。
+它的定位是调度中心：自己不做具体的事，靠插件和脚本串联起 GitLab、SonarQube、构建机、部署目标。这也是它装完之后第一件事是装插件的原因。
+二、部署：从 JDK 到启动Jenkins 2.4xx 之后的版本需要 JDK 11 以上，我用的 JDK 17。
+# 1. 安装 JDKrpm -ivh jdk-17_linux-x64_bin.rpmjava -versionrpm -qa | grep jdk        # 确认装上了，输出 jdk-17-17.0.11-7.x86_64# 2. 安装 Jenkins（官网下载 rpm 后上传内网）rpm -ivh jenkins-2.405-1.1.noarch.rpm
+
+安装完先别急启动，有两个配置要改：
+# 3. 调整端口与启动用户# 改端口（默认 8080，和别的服务冲突时改掉）sed -i &#x27;s/JENKINS_PORT=&quot;.*&quot;/JENKINS_PORT=&quot;8082&quot;/&#x27; /etc/sysconfig/jenkins# 改启动用户：/etc/sysconfig/jenkins 里确认 JENKINS_USER=&quot;root&quot;# 同时改 systemd 单元里的 User/Group，两处必须一致vim /usr/lib/systemd/system/jenkins.service# User=root# Group=rootsystemctl daemon-reload# 4. 安装字体（生成构建报告、图表时要用，不装会出方块乱码）yum -y install fontconfig# 5. 启动并设为开机自启systemctl start jenkinssystemctl enable jenkins
+
+这里有个我踩过的坑：只改了 JENKINS_USER 没改 systemd 单元里的 User=，结果服务表面启动成功，但工作目录还是落在旧用户家目录，构建产物找不到。两个地方都改、然后 daemon-reload，缺一不可。
+三、初始化与插件离线安装启动后用浏览器访问 http://10.0.8.201:8082，第一步是解锁，初始密码在：
+cat /var/lib/jenkins/secrets/initialAdminPassword
+
+解锁后按向导创建管理员账号。用默认账号 admin 改完密码会要求重新登录，属正常流程。
+内网环境装插件是另一个坎：在线插件市场连不上，只能用离线包。
+# 手动插件包：上传压缩包到 Jenkins 家目录，解压进 plugins 目录cd /var/lib/jenkins/# 上传 jenkins_plugins.tar.gz（约 250MB，内网离线包）tar xf jenkins_plugins.tar.gz -C plugins/# 重启生效systemctl restart jenkins
+
+离线包是提前在外网环境按”要用的插件清单”装好整套目录打包的。注意插件之间有依赖，一个个单独下很容易漏依赖，直接整目录打包最稳。
+四、第一个测试项目：看懂 workspace创建第一个自由风格项目，构建步骤里执行 pwd，就能看到 Jenkins 的工作目录机制：
+# 项目构建一次后，看看工作目录ls /var/lib/jenkins/workspace/# 输出里出现以项目名命名的目录，比如 test_job
+
+规则很简单：每个项目在 /var/lib/jenkins/workspace/ 下有自己的目录，代码、构建产物都在里面。后面”Jenkins 拉取 GitLab 代码”就是把仓库内容拉到这个目录里，理解了这个目录，后面所有构建问题都有了排查起点。
+五、SonarQube：代码质量检测平台CI 光跑通还不够，还得有人管代码质量。SonarQube 就是干这个的：扫描代码，标出 bug、漏洞、坏味道。部署前先看要求：
+
+基于 Java，这个版本需要 JDK 8；
+依赖 MySQL，5.6 以上；
+小型实例至少 4G 内存，团队用建议 8G 起。
+
+服务端部署# 1. 运行环境rpm -ivh jdk-8u181-linux-x64.rpm# 2. 数据库（用官方源装 MySQL）yum -y install mysql-community-serversystemctl start mysqld# 设置 root 密码mysqladmin -uroot password &#x27;Sonar@2024&#x27;# 创建 sonar 库，字符集 utf8mysql -uroot -p&#x27;Sonar@2024&#x27; -e &quot;CREATE DATABASE sonar DEFAULT CHARACTER SET utf8;&quot;
+
+# 3. 安装 SonarQubecd /usr/local/unzip sonarqube-7.0.zipln -s sonarqube-7.0 sonarqube        # 软链接方便升级切换# 4. 替换插件（离线包，删掉自带的）rm -rf /usr/local/sonarqube/extensions/plugins/*tar xf sonar_plugins.tar.gz -C /tmp/sonar_plugins/mv /tmp/sonar_plugins/plugins/* /usr/local/sonarqube/extensions/plugins/# 5. 创建专用运行用户并授权useradd sonarchown -R sonar:sonar /usr/local/sonarqube/
+
+# 6. 配置数据库连接：/usr/local/sonarqube/conf/sonar.propertiessonar.jdbc.username=rootsonar.jdbc.password=Sonar@2024sonar.jdbc.url=jdbc:mysql://localhost:3306/sonar?useUnicode=true&amp;characterEncoding=utf8&amp;useSSL=false
+
+# 7. 启动（SonarQube 不允许 root 运行，必须普通用户）su - sonar -c &quot;/usr/local/sonarqube/bin/linux-x86-64/sonar.sh start&quot;
+
+“不能用 root 启动”这条要特别记住，我第一次直接 root 跑，日志里一句含糊的报错，查了半天才定位到是启动用户的问题。生产上这类中间件都应该建专用账号跑。
+启动后访问 http://10.0.8.203:9000，默认账号密码都是 admin，第一次登录强制改密码。然后去”我的账号 → 安全”生成一个 Token——Token 只显示一次，当场复制保存，扫描客户端要用它认证。
+扫描客户端：sonar-scannersonar-scanner 装在 Jenkins 服务器上，让它能主动把代码推给 SonarQube 扫描：
+# 1. 解压并做软链接cd /usr/local/unzip sonar-scanner-cli-4.2.0.1873-linux.zipln -s sonar-scanner-4.2.0.1873-linux sonar# 2. 加入 PATH（写进 /etc/profile 永久生效）echo &#x27;export PATH=&quot;$PATH:/usr/local/sonar/bin/&quot;&#x27; &gt;&gt; /etc/profilesource /etc/profile# 3. 拿一个项目试扫：进到代码目录执行cd /var/lib/jenkins/workspace/game_job/sonar-scanner \  -Dsonar.projectKey=html \  -Dsonar.sources=. \  -Dsonar.host.url=http://10.0.8.203:9000 \  -Dsonar.login=&lt;你的Token&gt;
+
+执行完去 SonarQube 的”项目”页面就能看到这次扫描的结果。到这一步，Jenkins 和 SonarQube 还是两个独立的系统，后面把它们串进同一条流水线，才算完整的质量门禁。
+收尾这套平台搭建的核心经验其实就三条：内网环境提前备好离线安装包、启动用户和权限按规矩配、SonarQube 这类组件用专用账号运行。装完只是开始，让它稳定跑在生产上，靠的是后面插件管理和流水线的持续维护。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>CI/CD</tag>
+        <tag>Jenkins</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>JumpServer 堡垒机落地实战：三类用户模型与 sudo 白名单</title>
+    <url>/2023/12/20/JumpServer%E5%A0%A1%E5%9E%92%E6%9C%BA%E8%90%BD%E5%9C%B0%E5%AE%9E%E6%88%98/</url>
+    <content><![CDATA[JumpServer 堡垒机落地实战：三类用户模型与 sudo 白名单SSH 加固之后权限问题暴露得更明显了：业务机器上人手一个账号、root 随处可用、发出去的密码收不回来、出了事谁也说不清”那条命令是谁敲的”。数量到十几台之后，靠约定已经管不住了，上一套堡垒机是唯一的出路。这篇记录 JumpServer 的落地过程。
+一、为什么必须要有统一入口直连模式下有四个治不了的病：
+
+账号泛滥：每个人一个 root 或业务账号，密码到处传，离职了账号还在；
+权限不可控：开发能登生产、能改配置，没人知道；
+没有审计：出事只能查命令历史，多用户共享账号时基本没法定位；
+暴露面大：业务服务器直接开 22 端口对公网，每天被扫。
+
+堡垒机的定位就是：唯一入口 + 统一认证 + 权限隔离 + 操作审计。所有运维操作要么走 Web 终端，要么 SSH 先连堡垒机再选资产，业务机不再对个人开放。
+跳板机和堡垒机的区别也顺带说清：跳板机只是”一台中转服务器”；堡垒机是一整套平台，多了统一账号体系、资产授权、命令过滤、录像回放这些能力。
+二、部署与组件构成JumpServer 的组件比想象中多，但安装脚本已经全包了：
+cd /opttar -xf jumpserver-ce-v3.x.x-x86_64.tar.gzcd jumpserver-ce-v3.x.x-x86_64cat config-example.txt          # 先看配置模板（端口、数据库、Redis 参数）./jmsctl.sh install             # 安装（会初始化 MySQL/Redis/Docker 组件）./jmsctl.sh start               # 启动./jmsctl.sh -h                  # 其他管理命令：down / uninstall
+
+装完记住两件事：默认密码登录后立刻改掉，以及马上开启 MFA——堡垒机是内网权限最集中的一台机器，它被攻破等于全公司沦陷。
+核心组件（理解它们才好排障）：Core（主服务：用户&#x2F;资产&#x2F;授权&#x2F;审计）、Koko（SSH 协议代理，ssh&#x2F;sftp 转发）、Luna（Web 终端）、Magnus（数据库代理）、RDP&#x2F;VNC 代理（连 Windows）。
+三、三类用户模型：先想清楚再动手这是 JumpServer 权限体系的骨架，没理顺就上线，后面全是返工：
+
+
+
+类型
+是什么
+例子
+
+
+
+普通用户
+登录 JumpServer 的真实员工
+kf_user01、yw_user01
+
+
+系统用户
+堡垒机登录到后端服务器时用的账号
+kfhd（开发）、ywhd（运维）
+
+
+特权用户
+管理后端服务器的高级账号
+root 或免密账号
+
+
+落地顺序固定为七步：
+# 1. 建用户组：开发组 dev、运维组 ops# 2. 建普通用户并入组（一人一号，禁止共享）# 3. 建特权用户（先在底层打通免密）ssh-keygen -t ed25519for ip in 172.18.1.&#123;7,41,51&#125;; do ssh-copy-id -i ~/.ssh/id_ed25519.pub $ip; done# 4. 建系统用户（账号模板负责自动推送到目标服务器）# 5. 建资产（服务器/数据库/网络设备）# 6. 授权：组对组（开发组 → 开发资产组，用 kfhd 身份）# 7. 验证：从作业中心看账号是否自动推送成功
+
+实际登录逻辑（生产模型）：
+普通用户 kf_user01/kf_user02  →  Web 或无感知 SSH 登录到 JumpServer     ↓ 按授权选择资产系统用户 kfhd（开发连接账号）   →  只能做业务操作系统用户 ywhd（运维连接账号）   →  走 sudo 白名单提权特权用户 root                  →  批量管理、Ansible 自动化用
+
+四、sudo 白名单：不给 root，但要能干活“不给 root”不是一句口号，落地要靠 sudo 规则，而且必须用全路径：
+# 先查命令真实路径which systemctl whoami# 单独文件管理，不动 /etc/sudoers 主文件visudo -f /etc/sudoers.d/kfhd
+
+开发组（只给业务相关操作）：
+kfhd ALL=(ALL) NOPASSWD: /usr/bin/systemctl status tomcat, \                          /usr/bin/systemctl restart tomcat, \                          /usr/bin/tail -f /data/app/logs/*, \                          /usr/bin/less, /usr/bin/cat
+
+运维组（系统级操作放开一档）：
+ywhd ALL=(ALL) NOPASSWD: /usr/bin/systemctl, /usr/bin/tail, /usr/bin/less, \                          /usr/bin/yum, /usr/bin/docker, /usr/bin/chmod, /usr/bin/chown
+
+自查命令常备：sudo -l 看自己有什么权限、id 看身份、which 确认路径——sudo 白名单写错路径是最常见的”配了不生效”原因。
+
+JumpServer 账号模板推下来的 sudo 配置默认免密（用户已在堡垒机做过一次认证），这符合”一次认证、一次授权”的设计，但命令列表一定要按业务收紧，别图省事写 /usr/bin/*。
+
+五、命令过滤与 MFA命令过滤是堡垒机的核心风控，在”访问控制 → 命令过滤”里配置：
+# 危险命令组示例rm -rf /, mkfs.*, dd if=/dev/zero, shutdown, poweroff, drop database, truncate table# 策略：运维组执行危险命令 → 审批；开发组 → 直接拒绝
+
+MFA 必开：堡垒机账号是内网最高价值目标。生产规范是”新用户强制绑定 MFA 才能登录”+90 天密码轮换。绑定走用户中心 → 安全设置，扫码即可（TOTP 小程序）。
+另外两个实用功能：
+
+网域：多云多地域的机器通过”区域网关”分层管理，堡垒机对网关免密、网关对域内机器免密；
+数据库资产：通过 Magnus 代理接入，SQL 也进审计，高危 SQL（无 where 的 delete、drop）可以配拦截规则。
+
+六、关掉直连：最后一步，也是最关键的一步堡垒机装好只是开始，业务服务器不关直连，一切白搭：
+# 每个业务节点的 sshd 只允许堡垒机网段访问# 或在云安全组/防火墙层面：业务机 1022 端口只放行堡垒机 IP
+
+我们当时的落地清单：
+
+全量服务器 SSH 基线加固（改端口、禁 root、密钥认证、fail2ban）；
+部署 JumpServer，改默认密码、开 MFA、配邮件告警；
+按”用户组 → 普通用户 → 系统用户 → 特权用户”建完模型；
+资产按环境（生产&#x2F;测试）和业务分组纳管，账号模板统一推送；
+授权按组对组最小化，sudo 白名单收紧到业务实际需要；
+开启命令过滤，高危命令走审批；
+防火墙层面只放行堡垒机到业务机的连接；
+开发&#x2F;运维各验证一次完整链路（登录、提权、传文件）；
+审计落地：定期抽查录像，离职账号当天回收。
+
+七、安全红线上线后写进团队规范、谁都不能碰的几条：
+
+禁止绕过堡垒机直连业务机——发现直连端口一律封；
+禁止共享账号——一人一号，否则审计形同虚设；
+禁止 root 满天飞——root 只留给特权用户，日常操作走 sudo 白名单；
+禁止明文密码——配置文件、笔记、代码库里都不能存密码，走密码管理器或 ansible-vault；
+禁止永久会话——会话超时、空闲踢下线；
+高危操作必审批——rm -rf、drop 库这类必须留下审批记录。
+
+八、收尾感受堡垒机上线一个月后回看，最大的变化不是”安全了多少”，而是出了问题能查到人、能回放现场——这比任何事前的口头约定都管用。运维的权限治理本质上是被审计压力倒逼出来的规范：当每个人都知道操作会留痕，破坏性命令自然就少了。
+]]></content>
+      <categories>
+        <category>网络与安全</category>
+      </categories>
+      <tags>
+        <tag>SSH</tag>
+        <tag>堡垒机</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>LNMP 架构实战：从单机搭建到数据库分离与动静分离</title>
+    <url>/2023/11/08/LNMP%E6%9E%B6%E6%9E%84%E5%AE%9E%E6%88%98%E6%95%B0%E6%8D%AE%E5%BA%93%E5%88%86%E7%A6%BB%E4%B8%8E%E5%8A%A8%E9%9D%99%E5%88%86%E7%A6%BB/</url>
+    <content><![CDATA[LNMP 架构实战：从单机搭建到数据库分离与动静分离公司官网最早是一个”大杂烩”单机：Nginx、PHP-FPM、MySQL 全挤在一台 4G 内存的服务器上。某次推广活动流量上来，MySQL 被系统 OOM Killer 干掉，网站挂了半小时。那次之后我们做了一轮架构拆分——这篇记录从单机 LNMP 到多节点分离的全过程。
+一、先理清 LNMP 怎么跑LNMP &#x3D; Linux + Nginx + MySQL + PHP，请求链路是这样的：
+浏览器 → Nginx（静态文件直接返回）              └→ .php 请求经 FastCGI 交给 PHP-FPM 执行                     └→ PHP 连 MySQL 取数据 → 生成 HTML 返回
+
+关键点是 Nginx 自己不执行 PHP，它把 .php 请求通过 FastCGI 协议转给 PHP-FPM 进程池处理。所以 Nginx 和 PHP-FPM 的”运行用户”必须一致，否则 PHP 读不到 Nginx 放的文件，这也是新手最常见的权限问题来源。
+二、单机搭建1. Nginx 与统一用户# 安装 Nginx（官方源，见前文）yum install nginx -y# 建统一运行用户groupadd www -g 666useradd www -u 666 -g 666 -s /sbin/nologin -Msed -i &#x27;/^user/c user www;&#x27; /etc/nginx/nginx.confsystemctl start nginx &amp;&amp; systemctl enable nginx
+
+2. PHP-FPM# 用第三方源装 PHP 7.1（CentOS 7 自带版本太旧）yum -y install php71w php71w-cli php71w-common php71w-gd php71w-mbstring \  php71w-pdo php71w-xml php71w-fpm php71w-mysqlnd php71w-opcache --nogpgcheck# 让 PHP-FPM 也用 www 用户（和 Nginx 保持一致）sed -i &#x27;/^user/c user = www&#x27; /etc/php-fpm.d/www.confsed -i &#x27;/^group/c group = www&#x27; /etc/php-fpm.d/www.confsystemctl start php-fpm &amp;&amp; systemctl enable php-fpm
+
+3. MySQL（MariaDB）yum install mariadb-server -ysystemctl start mariadb &amp;&amp; systemctl enable mariadbmysqladmin password &#x27;App@123&#x27;          # 给 root 设初始密码mysql -uroot -p&#x27;App@123&#x27;
+
+4. Nginx 侧接入 FastCGI# /etc/nginx/conf.d/php.example.com.confserver &#123;    listen 80;    server_name php.example.com;    root /code;    index index.php index.html;    location ~ \.php$ &#123;        root /code;        fastcgi_pass 127.0.0.1:9000;        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;        include fastcgi_params;    &#125;&#125;
+
+写两个测试文件验证：info.php（phpinfo）确认 PHP 通了；mysqli.php 确认 PHP 能连数据库：
+&lt;?php    $servername = &quot;localhost&quot;;    $username = &quot;root&quot;;    $password = &quot;App@123&quot;;    $conn = mysqli_connect($servername, $username, $password);    if (!$conn) &#123;        die(&quot;Connection failed: &quot; . mysqli_connect_error());    &#125;    echo &quot;PHP 连接 MySQL 正常&quot;;?&gt;
+
+两个页面都通了，LNMP 基础环境就算立住了。
+
+这里有个常见的白页问题：phpinfo() 打开一片空白，八成是 fastcgi_pass 指向的 PHP-FPM 没起，或者 SCRIPT_FILENAME 拼错导致 PHP 找不到文件。先看 Nginx error.log，再确认 systemctl status php-fpm。
+
+三、数据库分离：把 OOM 的根因拆掉单机的隐患在于：PHP-FPM 和 MySQL 抢内存，MySQL 往往是那个被系统杀掉的（OOM Killer 优先杀内存占用大的进程）。把数据库拆到独立服务器：
+# 1) web 侧全库备份导出mysqldump -uroot -p&#x27;App@123&#x27; -A &gt; mysql-all.sqlscp mysql-all.sql root@172.18.1.51:/tmp# 2) db01 上安装数据库并导入yum install mariadb mariadb-server -ysystemctl start mariadb &amp;&amp; systemctl enable mariadbmysql -uroot -p&#x27;App@123&#x27; &lt; /tmp/mysql-all.sql# 3) 建业务账号（不用 root 连业务库），按网段授权mysql -uroot -p&#x27;App@123&#x27;mysql&gt; grant all on *.* to appuser@&#x27;172.18.1.%&#x27; identified by &#x27;App@123&#x27;;mysql&gt; flush privileges;
+
+两头命名要保持一致：建库、建用户的操作细节，走之前跟开发对一遍——因为下一步就要改应用的数据库地址。
+# web 侧修改应用配置（以 WordPress 为例）define(&#x27;DB_NAME&#x27;, &#x27;wordpress&#x27;);define(&#x27;DB_USER&#x27;, &#x27;appuser&#x27;);define(&#x27;DB_PASSWORD&#x27;, &#x27;App@123&#x27;);define(&#x27;DB_HOST&#x27;, &#x27;172.18.1.51&#x27;);      # 从 localhost 改为 db01
+
+改完访问网站验证。这里有个偷懒但有效的小技巧：用 grep -iR &quot;旧地址或旧密码&quot; /code --exclude-dir=cache 全局扫一遍代码目录，防止漏掉某个配置文件——我们当时就漏了一个 wiki 系统的 database.php。
+四、Web 扩到多节点单台 Web 是另一个单点，扩容的思路是”复制一份，数据源统一”：
+# 新节点建用户、装 Nginx/PHP（可以先把 web01 的源配置拷过去）scp -rp root@172.18.1.7:/etc/yum.repos.d/* /etc/yum.repos.d/yum install nginx -y &amp;&amp; yum -y install php71w ...（同上）# 配置与代码整体同步scp -rp root@172.18.1.7:/etc/nginx /etc/scp -rp root@172.18.1.7:/etc/php-fpm.d /etc/# 代码包同步tar czf code.tar.gz /code &amp;&amp; scp code.tar.gz root@172.18.1.8:/tmptar xf /tmp/code.tar.gz -C /
+
+清单核对：Nginx 配置、PHP 配置、代码、运行用户、数据库地址——五项全对，节点才算”一样”。后面接负载均衡（前一篇讲过的 upstream），多节点就生效了。
+五、上传目录挂 NFS：静态资源的一致性多节点之后下一个问题立刻来：用户上传的图片只落在接收请求的那台机器上，轮询到另一台就 404。方案是加一台 NFS，把上传目录共享给所有 Web 节点：
+# NFS 服务端yum install nfs-utils -ycat /etc/exports/data/blog 172.18.1.0/24(rw,sync,all_squash,anonuid=666,anongid=666)mkdir -p /data/blog &amp;&amp; chown -R www:www /data/systemctl restart nfs-server# 各 Web 节点挂载到应用的上传目录yum install nfs-utils -ymount -t nfs 172.18.1.31:/data/blog /code/wordpress/wp-content/uploads/echo &quot;172.18.1.31:/data/blog /code/wordpress/wp-content/uploads nfs defaults 0 0&quot; &gt;&gt; /etc/fstabmount -a
+
+挂载前先把原来本地的文件拷进共享目录（选资源最全的那台做源），否则用户会看到”老图片全裂了”这种诡异现象。
+六、动静分离：三种落地方式动静分离的意义：静态请求（图片、CSS、JS）由 Nginx 直接返回，动态请求（PHP&#x2F;JSP&#x2F;接口）才转后端。这样静态资源不吃后端资源，动态服务挂了静态页面也不受影响。
+方式一：单机做（最简单的起步）server &#123;    listen 80;    server_name www.example.com;    root /code/wordpress;    location ~* \.(png|jpg|gif|css|js|mp4)$ &#123;        root /code/wordpress/images;        expires 7d;        access_log off;    &#125;    location ~ \.php$ &#123;        fastcgi_pass 127.0.0.1:9000;        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;        include fastcgi_params;    &#125;&#125;
+
+方式二：静态一台、动态一台静态资源单独给一台机器（或 CDN 源站），Nginx 上按后缀分流：
+# 静态节点 web01server &#123;    listen 80;    server_name pic.example.com;    root /code;    location ~* .*\.(jpg|png|gif)$ &#123;        root /code/images;    &#125;&#125;# 动态节点 web02 跑 Tomcat/PHP
+
+方式三：在负载均衡上统一调度入口层按请求类型分到不同 upstream，这是多节点场景的最终形态：
+upstream static &#123;    server 172.18.1.7:80;&#125;upstream java &#123;    server 172.18.1.8:8080;&#125;server &#123;    listen 80;    server_name pic.example.com;    location / &#123;        root /code;        index index.html;    &#125;    location ~* \.(jpg|png|gif)$ &#123;        proxy_pass http://static;        proxy_set_header Host $http_host;    &#125;    location ~ \.jsp &#123;        proxy_pass http://java;        proxy_set_header Host $http_host;    &#125;&#125;
+
+附：按客户端类型分流同一个域名按终端类型调度到不同资源，用 $http_user_agent 判断即可：
+upstream android &#123; server 172.18.1.7:9090; &#125;upstream iphone  &#123; server 172.18.1.7:9091; &#125;upstream pc      &#123; server 172.18.1.7:9092; &#125;server &#123;    listen 80;    server_name m.example.com;    charset utf-8;    location / &#123;        if ($http_user_agent ~* &quot;Android&quot;) &#123; proxy_pass http://android; &#125;        if ($http_user_agent ~* &quot;Iphone&quot;)  &#123; proxy_pass http://iphone; &#125;        if ($http_user_agent ~* &quot;MSIE&quot;)    &#123; return 403; &#125;   # 老 IE 直接拒绝        proxy_pass http://pc;    &#125;&#125;
+
+
+注意：if 在 location 里有”陷阱”，多条件场景建议用 map 指令提前算好变量，逻辑更清晰。
+
+七、这套架构的复盘拆完之后的收益很直观：内存不再打架（数据库独占一台）、单台 Web 故障不影响整体、静态文件走共享存储和缓存后动态服务压力降了一大截。
+教训也有三条：数据库迁移前把连接配置”全局 grep 一遍”、NFS 挂载要进 fstab 并测试重启后自动挂载、扩容新节点时先对照老节点做配置差异清单。这三点做到位，架构拆分就是一次平稳的升级，而不是一场事故。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Nginx</tag>
+        <tag>LNMP</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Nginx 反向代理与负载均衡实战：upstream、真实 IP 与四层七层选型</title>
+    <url>/2023/10/25/Nginx%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E4%B8%8E%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E5%AE%9E%E6%88%98/</url>
+    <content><![CDATA[Nginx 反向代理与负载均衡实战：upstream、真实 IP 与四层七层选型把后端从一台扩到多台只是加两个 IP 的事，真正麻烦的是加完之后冒出来的一堆问题：后端日志里全是负载均衡的 IP、出了 502 不知道该看哪张日志、两个后端”用户登录状态随机丢失”。这篇把反向代理和负载均衡这一层该配的东西整理一遍。
+一、正代理和反代理，一句话分清区别在服务的对象：正向代理代理客户端（客户端主动配置代理，代表是翻墙工具和企业上网代理），反向代理代理服务端（客户端以为在直连，实际请求被 Nginx 转发给后端）。运维日常干的都是后者。
+对后端的价值就三条：统一入口（后端扩缩容用户无感知）、分摊压力（多节点负载）、安全缓冲（后端不直接暴露公网，可在入口层做限流、WAF、HTTPS 卸载）。
+二、proxy_pass 的参数才是关键最简配置一行就够，但那只是开始：
+location / &#123;    proxy_pass http://172.18.1.7:8080;&#125;
+
+1. 请求头透传（不配就是给自己挖坑）proxy_set_header Host $http_host;                # 保留用户访问的域名proxy_set_header X-Real-IP $remote_addr;         # 客户端 IPproxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;proxy_set_header X-Forwarded-Proto $scheme;      # 标记 http/https
+
+不配 Host 的后果很典型：后端一台服务器挂了多个虚拟主机，Nginx 转发过去都用默认站点匹配，用户访问 A 网站结果出来了 B 网站。不配 X-Forwarded-For 的后果是后端业务日志里所有请求都来自代理 IP，”哪些用户在访问”这个问题直接没法回答。
+2. 超时与缓冲proxy_connect_timeout 30s;    # 与后端建立连接的超时proxy_send_timeout 60s;       # 向后端发送请求的超时proxy_read_timeout 60s;       # 等待后端响应（最常调整的一个）proxy_buffering on;           # 边收边传proxy_buffer_size 32k;        # 响应头的缓冲区proxy_buffers 4 128k;         # 响应体缓冲区
+
+经验值：一般接口 60s 够用；导出类接口要单独放宽；proxy_read_timeout 调大之前先想清楚——它只是把”超时失败”变成”用户等更久”，后端真慢还是要治后端。
+3. WebSocket 和 HTTPS 的代理# WebSocket：必须带 Upgrade 头，否则握手失败location / &#123;    proxy_pass http://127.0.0.1:9501;    proxy_http_version 1.1;    proxy_set_header Upgrade $http_upgrade;    proxy_set_header Connection &quot;upgrade&quot;;    proxy_read_timeout 3600s;    # 长连接不能 60s 断&#125;
+
+这套参数我统一放进了 /etc/nginx/proxy_params，业务配置里一行 include proxy_params; 复用，改参数只改一处。
+三、upstream：负载均衡核心upstream web_pool &#123;    server 172.18.1.7:80  weight=5 max_fails=3 fail_timeout=30s;    server 172.18.1.8:80  weight=3 max_fails=3 fail_timeout=30s;    server 172.18.1.9:80  down;      # 手动下线，维护时用    server 172.18.1.10:80 backup;    # 备用机：其他全挂才启用    keepalive 32;                    # 与后端的长连接池&#125;server &#123;    location / &#123;        proxy_pass http://web_pool;        proxy_http_version 1.1;      # keepalive 必须配 1.1        proxy_set_header Connection &quot;&quot;;    &#125;&#125;
+
+几个参数的生产含义：
+
+
+
+参数
+作用
+建议
+
+
+
+weight
+权重，按比例分发
+新机器先给小权重观察
+
+
+max_fails &#x2F; fail_timeout
+失败 N 次后摘除，多久后重试
+默认 1 次太敏感，生产 2~3 次
+
+
+backup
+备用节点，全挂才启用
+容灾必备，成本允许就配
+
+
+down
+手动下线
+维护时改配置，不删节点
+
+
+keepalive
+与后端的长连接池
+每次请求都重连后端时 QPS 上不去，优先调这个
+
+
+调度算法上，轮询和权重能覆盖大多数场景；ip_hash 是会话保持的兜底方案（有副作用，见下文）；least_conn 在请求耗时差异大时更均衡。
+健康检查Nginx 自带的只有被动检查（max_fails）——后端挂了，要等真实请求失败才会摘除。想要主动探测得用第三方模块 nginx_upstream_check_module，编译进 Nginx：
+upstream web &#123;    server 172.18.1.7:80 max_fails=2 fail_timeout=10s;    server 172.18.1.8:80 max_fails=2 fail_timeout=10s;    check interval=3000 rise=2 fall=3 timeout=1000 type=tcp;    # 每 3 秒探测一次，2 次成功标记 up，3 次失败标记 down&#125;location /upstream_check &#123;    check_status;    # 页面直接看各后端健康状态&#125;
+
+预算够的话更省心的方案是云上负载均衡（SLB&#x2F;CLB）或 LVS+Keepalived，健康检查是内置的；用 Nginx 就得接受”编译第三方模块”这一步。
+四、真实 IP：多级代理下怎么拿到用户地址只要经过一层代理，后端看到的 $remote_addr 就变成了代理的 IP。分两种情况：
+后端是 Nginx：用 realip 模块把 XFF 头里的真实 IP 还原出来。
+server &#123;    listen 80;    server_name www.example.com;    set_real_ip_from 172.18.1.5;      # 上一级代理的 IP，可以写多行    set_real_ip_from 172.18.1.6;    real_ip_header X-Forwarded-For;    real_ip_recursive on;&#125;
+
+之后日志里的 $remote_addr 就是真实客户端 IP 了。
+后端是业务程序：程序框架一般有约定，从 X-Forwarded-For 取第一个地址。要提醒开发注意：XFF 是客户端可以伪造的头字段，只有前面每一层代理都追加过才是可信的——所以要配合 set_real_ip_from 限定”只信任已知代理写入的部分”。
+五、四层还是七层
+七层（Nginx http&#x2F;upstream）：能解析 HTTP，按域名、URL、header 分流，能做会话保持、rewrite、缓存——但性能比四层低；
+四层（Nginx stream 或 LVS）：只转发 TCP 包，不解析内容，性能最高，适合数据库、SSH 这类非 HTTP 服务，或者大流量入口。
+
+Nginx 做四层需要单独配置在 http 块外面：
+# /etc/nginx/conf.c/lb.confstream &#123;    upstream web01_ssh &#123;        server 172.18.1.7:22;    &#125;    upstream db01 &#123;        server 172.18.1.51:3306;    &#125;    server &#123;        listen 5555;        proxy_pass web01_ssh;    # 访问 5555 即后端 22    &#125;    server &#123;        listen 6666;        proxy_pass db01;         # 访问 6666 即后端 3306    &#125;&#125;
+
+典型用途就是数据库代理：业务连 10.0.8.4:6666，实际打到 MySQL 的 3306，后端数据库不用对外暴露真实端口。
+六、502&#x2F;504&#x2F;499：入口层的三个高频故障
+
+
+状态码
+含义
+排查方向
+
+
+
+502
+Nginx 连不上后端
+后端进程没了&#x2F;端口不通&#x2F;防火墙
+
+
+504
+后端响应超时
+后端慢（慢 SQL、死锁、GC）
+
+
+499
+客户端等不及先断了
+后端处理慢，用户侧超时
+
+
+502 的标准排查路径：
+curl -I http://www.example.com        # 先确认现象tail -50 /var/log/nginx/error.log     # 关键日志#   connect() failed (111: Connection refused)  → 后端没起#   upstream timed out                          → 后端响应慢ss -lntp | grep 8080                  # 后端端口在不在systemctl status tomcat               # 后端服务状态
+
+另外有个配置值得加上，能让”单台后端偶发 500”不至于把整个请求打回用户：
+proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
+
+意思是这台后端返回 5xx 时，把请求转给下一台重试——请求成功率立竿见影，但要注意：非幂等操作（下单、支付）不能开，重试可能造成重复提交，这个必须跟开发对齐后再加。
+七、会话保持：优先改应用，别硬锁 IPip_hash 是最省事的方案，但有两个坑：同一出口 IP 的用户（公司网络、代理）全压到同一台后端；单节点故障时，那部分用户的登录态全丢。
+更稳的方案是把会话外置，让任何一台后端都能识别登录态：
+
+PHP 应用：session.save_handler = redis，session 存 Redis（后面 LNMP 那篇展开）；
+Java 应用：Tomcat 集群的 Redis 会话管理器。
+
+选型上的建议：短期救急用 ip_hash，长期一定走统一会话存储——扩容、发版、缩容都不会再被它绊住。
+八、小结反向代理和负载均衡这一层的配置量不大，但每个参数背后都是一次生产教训：Host 不透传会串站、XFF 不透传日志全废、keepalive 不配性能上不去、proxy_next_upstream 乱开会产生重复下单。我的习惯是把 proxy_params 固化成一份模板，新站点直接 include，参数变更走一次压测验证——入口层稳定了，后面的排障压力会小很多。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Nginx</tag>
+        <tag>负载均衡</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Nginx 配置与日志实战：从配置文件结构到 rewrite 规则</title>
+    <url>/2023/10/11/Nginx%E9%85%8D%E7%BD%AE%E4%B8%8E%E6%97%A5%E5%BF%97%E5%AE%9E%E6%88%98/</url>
+    <content><![CDATA[Nginx 配置与日志实战：从配置文件结构到 rewrite 规则接手公司几台 Web 服务器时，我看到的第一样东西是：nginx.conf 被改过几十版，十几个站点全堆在一个文件里，日志统一写在一个 access.log。改一次配置要在一千多行里翻半天——那次改造是从”把配置理清楚”开始的。
+一、安装：直接用官方源CentOS 默认源里的 Nginx 版本偏旧，配置写法也落后。用官方仓库装：
+cat /etc/yum.repos.d/nginx.repo
+
+[nginx-stable]name=nginx stable repobaseurl=http://nginx.org/packages/centos/$releasever/$basearch/gpgcheck=1enabled=1gpgkey=https://nginx.org/keys/nginx_signing.key
+
+yum -y install nginxnginx -v       # nginx/1.24.0systemctl start nginx &amp;&amp; systemctl enable nginx
+
+启停只有两种姿势，但同一时间只能用一种：交给 systemd（systemctl start|stop|reload nginx），或者用绝对路径自己管（/usr/sbin/nginx -s reload）。混用会出现”systemctl 显示没启动、进程却活着”的情况，团队里统一成一种就行。
+二、配置结构：三层，业务全放 conf.dNginx 的配置是”总纲 + 分册”：主配置文件 nginx.conf 只放全局参数，业务站点的配置全部拆成独立文件放 conf.d/，主配置最后一行把它们 include 进来。
+/etc/nginx/├── nginx.conf          # 主配置，只放全局参数├── conf.d/             # 所有业务配置│   ├── www.conf        # 官网│   └── admin.conf      # 后台└── ssl/                # 证书
+
+nginx.conf 分三个块，记住各自的职责就行：
+# 全局块：管 Nginx 整体user  www;                      # 运行用户worker_processes  auto;         # worker 数按 CPU 核数自动error_log /var/log/nginx/error.log warn;pid /run/nginx.pid;# events 块：管连接能力events &#123;    use epoll;                  # Linux 下默认就是 epoll    worker_connections 10240;   # 单 worker 最大连接数&#125;# http 块：所有站点/代理的父容器http &#123;    include       mime.types;    default_type  application/octet-stream;    sendfile      on;    tcp_nopush    on;    keepalive_timeout 65;    gzip          on;    include /etc/nginx/conf.d/*.conf;   # 业务分册在这里进来&#125;
+
+一个业务文件就是一个 server，用域名区分：
+# /etc/nginx/conf.d/www.confserver &#123;    listen 80;    server_name www.example.com;    root /data/wwwroot/www;    index index.html;&#125;
+
+三、location：请求路由的优先级location 决定”这个 URL 用哪套配置处理”，是 Nginx 最核心也最容易写错的部分。优先级从高到低：
+
+
+
+匹配符
+规则
+优先级
+
+
+
+=
+精确匹配
+1
+
+
+^~
+前缀匹配，命中后不再走正则
+2
+
+
+~
+正则，区分大小写
+3
+
+
+~*
+正则，不区分大小写
+4
+
+
+/
+通用匹配
+5
+
+
+典型的生产写法：
+server &#123;    listen 80;    server_name www.example.com;    root /data/www;    # 静态资源：本地直接返回，关日志、加缓存    location ~* \.(jpg|css|js)$ &#123;        expires 7d;        access_log off;    &#125;    # 后台接口：转发给后端 Java 服务    location /api/ &#123;        proxy_pass http://127.0.0.1:8080;    &#125;    # 后台管理页：限制内网访问    location /admin/ &#123;        allow 192.168.10.0/24;        deny all;    &#125;    location / &#123;        index index.html;    &#125;&#125;
+
+root 和 alias 的区别这里必须点一下：location /download { root /package; } 实际找的是 /package/download；换成 alias /package; 才是去 /package 下拿。写错一个词，就是 404 和一小时排查的差距。
+四、几个实用的基础模块目录索引（当下载站用）location /download &#123;    alias /module;    autoindex on;                  # 列出目录文件    autoindex_exact_size off;      # 显示 KB/MB，不显示精确字节    autoindex_localtime on;        # 显示服务器时间    charset utf-8,gbk;             # 中文文件名不乱码&#125;
+
+状态监控（做连接数预警）server &#123;    listen 80;    server_name status.example.com;    location /nginx_status &#123;        stub_status;        allow 172.18.1.0/24;       # 只给内网看        allow 127.0.0.1;        deny all;    &#125;&#125;
+
+curl 一下能看到 Active connections、Reading/Writing/Waiting，接监控系统采集这两个值，连接数逼近上限时提前告警。
+访问控制与限流# 基于用户认证location /nginx_status &#123;    stub_status;    auth_basic &quot;Auth&quot;;    auth_basic_user_file /etc/nginx/auth_conf;&#125;# 生成密码文件（安装 httpd-tools 后）htpasswd -b -c /etc/nginx/auth_conf ops 密码# 连接限制：同一 IP 同时最多 1 个连接http &#123;    limit_conn_zone $remote_addr zone=conn_zone:10m;&#125;server &#123;    limit_conn conn_zone 1;&#125;# 请求限制：每 IP 每秒 1 个请求，超出的进队列（burst），队列满返回 503http &#123;    limit_req_zone $binary_remote_addr zone=req_zone:10m rate=1r/s;&#125;server &#123;    limit_req zone=req_zone burst=3 nodelay;    limit_req_status 478;            # 自定义状态码    error_page 478 /err.html;        # 错误页换成自己的&#125;
+
+限流的一个经验：别对 css&#x2F;js&#x2F;图片这类子资源做连接限制。一个页面动不动四十个静态请求，锁死连接数等于锁死正常用户；限流只针对 HTML 和接口。
+五、rewrite：改名、跳转、伪静态rewrite 用在三个场景：域名&#x2F;协议跳转、URL 结构调整、伪静态。语法是 rewrite 正则 替换 [flag]，flag 里最常用的是 redirect/permanent（返回 302&#x2F;301）和 last/break（内部重写）。
+# 案例1：/abc/1.html 实际访问 /ccc/bbb/2.htmllocation /abc &#123;    rewrite (.*) /ccc/bbb/2.html redirect;&#125;# 案例2：2018 年的目录结构改版，老链接自动跳新链接location /2018 &#123;    rewrite ^/2018/(.*)$ /2014/$1 redirect;&#125;# 案例3：http 全站跳 httpsserver &#123;    listen 80;    server_name www.example.com;    rewrite ^(.*) https://$server_name$1 redirect;&#125;
+
+跳转规则写完必须先开 rewrite 日志验证，否则你根本不知道哪条规则命中了：
+http &#123;    rewrite_log on;      # 日志级别 error_log ... notice&#125;
+
+redirect（302）和 permanent（301）怎么选？链接做过改版、确定不会回退，用 301 让浏览器记住；只是临时调整（比如维护页），用小心的 302——301 会被浏览器缓存，用户端的”跳转记忆”清不掉，这个坑我遇到过：测试时用了 301，改回正确规则后自己电脑上一直跳旧地址，清了浏览器缓存才恢复。
+六、日志：分站、切割、分析日志拆分与格式默认所有站点共用一个 access.log，出事时翻不动。规范做法是每个 server 单独一个日志文件：
+server &#123;    listen 80;    server_name www.example.com;    access_log /var/log/nginx/www.example.com.log main;    location /favicon.ico &#123;        access_log off;      # 这类请求没统计价值，直接关        return 200;    &#125;&#125;
+
+main 格式在 http 块里定义，生产上我会多带两个字段：
+log_format main &#x27;$remote_addr - $remote_user [$time_local] &quot;$request&quot; &#x27;                &#x27;$status $body_bytes_sent &quot;$http_referer&quot; &#x27;                &#x27;&quot;$http_user_agent&quot; &quot;$http_x_forwarded_for&quot; &#x27;                &#x27;$request_time $upstream_response_time&#x27;;
+
+$request_time（总耗时）和 $upstream_response_time（后端耗时）是排查”慢在 Nginx 还是慢在后端”的钥匙，务必加上。
+切割Nginx 装完后 /etc/logrotate.d/nginx 已经配好，默认每天切割、保留 52 份、压缩归档，不用自己写脚本。唯一要记住的是：不要手动 rm 正在写的日志——进程还握着文件句柄，磁盘空间不会释放。要清空就用 &gt; /var/log/nginx/access.log。
+常用分析命令# 访问量 TOP10 IP（抓爬虫/攻击源）awk &#x27;&#123;print $1&#125;&#x27; /var/log/nginx/access.log | sort | uniq -c | sort -nr | head -10# 状态码分布（看 404/502 的突增）awk &#x27;&#123;print $9&#125;&#x27; /var/log/nginx/access.log | sort | uniq -c | sort -nr# 慢接口 TOP（第 12 列是 $request_time）awk &#x27;$NF &gt; 1 &#123;print $0&#125;&#x27; /var/log/nginx/access.log | sort -k 12 -nr | head -10
+
+需要图形化的时候上 goaccess，一条命令生成实时报表：
+yum -y install goaccessnohup goaccess -f /var/log/nginx/access.log -o /code/log/index.html \      -p /etc/goaccess/goaccess.conf --real-time-html &amp;
+
+七、变更规范最后说一条纪律：改配置永远走”先 nginx -t 再 nginx -s reload“。-t 检查语法，reload 平滑重载——不断开任何连接。反例是直接 restart，业务高峰时等于主动制造一次故障。这个习惯看起来简单，但部署脚本里忘了加 nginx -t，一次缩进错误就足以让全站挂掉。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Nginx</tag>
+        <tag>日志</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战</title>
+    <url>/2023/11/22/Nginx%E9%AB%98%E5%8F%AF%E7%94%A8%E4%B8%8EHTTPS%E8%90%BD%E5%9C%B0/</url>
+    <content><![CDATA[Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战大促前做架构巡检时发现一个致命问题：整条链路里 Nginx 入口只有一台，它一挂全站就没了。同时安全合规也要求全站上 HTTPS。两件事凑一起做了一次改造：双机主备入口 + 证书统一下放到入口层。这篇记录配置过程和几个只有实际部署才会遇到的坑。
+一、Keepalived 怎么实现高可用Keepalived 基于 VRRP 协议做主备切换，核心是一台”虚拟路由器”：
+
+两台机器（master&#x2F;backup）组成一个组，对外暴露一个虚拟 IP（VIP）；
+域名解析指向 VIP；
+master 每秒发心跳，backup 收不到心跳就认为自己该接管，把 VIP 抢过来；
+用户侧无感知——地址没变，只是背后换了台机器。
+
+用户不用改任何配置，因为 VIP 和它的虚拟 MAC 在 ARP 缓存里是稳定的，这一点比”手动把 DNS 切到备机”可靠得多。
+二、主备配置yum install -y keepalived    # 两台都装
+
+master（lb01）：
+cat /etc/keepalived/keepalived.conf
+
+global_defs &#123;    router_id lb01              # 标识本机身份&#125;vrrp_instance VI_1 &#123;    state MASTER    interface eth0    virtual_router_id 50        # 主备必须一致，同网多组要不冲突    priority 150                # 优先级，主高备低    advert_int 1                # 心跳间隔 1s    authentication &#123;        auth_type PASS        auth_pass 1234          # 主备一致    &#125;    virtual_ipaddress &#123;        10.0.8.3                # VIP    &#125;&#125;
+
+backup（lb02）只需改三处：router_id lb02、state BACKUP、priority 100。
+systemctl start keepalived &amp;&amp; systemctl enable keepalivedip addr | grep 10.0.8.3         # 验证 VIP 在主上
+
+切换测试：停掉 master 的 keepalived，看 VIP 是否漂到 backup；再启动 master，看是否抢回。
+抢占与非抢占默认是抢占式：master 恢复后会把 VIP 抢回去。频繁抢来抢去对连接是有损的，追求稳定可以把两边都配成 BACKUP + nopreempt：
+vrrp_instance VI_1 &#123;    state BACKUP        # 两台都写 BACKUP    priority 150        # 仅靠优先级区分    nopreempt&#125;
+
+非抢占模式下的规则：两台 state 都是 BACKUP、都加 nopreempt、优先级一高一低——谁先拿到就谁持有，直到它真挂。
+脑裂：两台都以为自己是主“脑裂”指主备之间的心跳断了，但两台机器都还活着，各自认为自己是 master，VIP 就冲突了。常见诱因：网线&#x2F;交换机抖动、主备之间被防火墙拦了心跳。
+预防和检测：在备机放一个巡查脚本，能 ping 通主、同时自己又持有 VIP，就说明脑裂了。
+#!/bin/shvip=10.0.8.3master_ip=10.0.8.5while true; do    ping -c 2 $master_ip &amp;&gt;/dev/null    if [ $? -eq 0 -a `ip add | grep &quot;$vip&quot; | wc -l` -eq 1 ]; then        echo &quot;ha is split brain.warning.&quot;     # 该告警了    else        echo &quot;ha is ok&quot;    fi    sleep 5done
+
+生产上更稳妥的做法是把仲裁和告警接进监控（Zabbix&#x2F;钉钉），脚本只负责发现问题，处理动作走人工确认。
+三、Keepalived 要能感知 Nginx 死活只装 Keepalived 有个问题：Nginx 挂了但 Keepalived 还活着，VIP 不会漂移，用户请求照样打过来报错。必须写个探测脚本，Nginx 没了就主动退出 keepalived 触发切换：
+#!/bin/shnginxpid=$(ps -C nginx --no-header | wc -l)if [ $nginxpid -eq 0 ]; then    systemctl start nginx        # 先尝试拉起    sleep 3    nginxpid=$(ps -C nginx --no-header | wc -l)    if [ $nginxpid -eq 0 ]; then        systemctl stop keepalived   # 拉不起来就让位，让 VIP 漂走    fifi
+
+chmod +x /root/check_web.sh
+
+在 keepalived 配置里挂上：
+vrrp_script check_web &#123;    script &quot;/root/check_web.sh&quot;    interval 5           # 每 5 秒执行一次&#125;vrrp_instance VI_1 &#123;    ...    track_script &#123;        check_web    &#125;&#125;
+
+注意：抢占式只在 master 上配即可；非抢占式两台都要配。脚本执行时间要小于 interval，否则会互相打断。
+四、全站 HTTPS 改造1. 证书从哪来、放哪里正式环境用 CA 签发的证书（云厂商有免费 DV 证书）。测试环境用 openssl 自签：
+mkdir -p /etc/nginx/ssl_key &amp;&amp; cd /etc/nginx/ssl_key# 生成自签证书（有效期 10 年，CN 填域名，邮箱填自己的）openssl req -days 36500 -x509 -sha256 -nodes \  -newkey rsa:2048 -keyout server.key -out server.crt# 确认 Nginx 编译带了 ssl 模块nginx -V | grep with-http_ssl_module
+
+证书文件权限设 600，私钥泄露等于证书作废。
+2. 入口层统一终止 HTTPS证书只配在负载均衡层，后端继续跑 HTTP（内网传输），这是最常见的架构：
+upstream website &#123;    server 172.18.1.8:80;    server 172.18.1.9:80;&#125;server &#123;    listen 443 ssl;    server_name www.example.com;    ssl_certificate     ssl_key/server.crt;    ssl_certificate_key ssl_key/server.key;    location / &#123;        proxy_pass http://website;        proxy_set_header Host $http_host;        include proxy_params;    &#125;&#125;# 80 强制跳 443server &#123;    listen 80;    server_name www.example.com;    return 302 https://$server_name$request_uri;&#125;
+
+3. 上线后出现”破图”和跳转死循环——两个真实坑破图：WordPress 早期用 http 安装，站点地址和文章里的图片链接都写进了数据库（http://www.example.com/...）。上 HTTPS 后浏览器判定”HTTPS 页面加载 HTTP 资源”不安全，图片全裂。处理办法：
+
+用 WP 后台”设置 → 常规”把站点地址改成 https；
+数据库里的历史链接做一次批量替换（改前先备份库）；
+长期方案是在加载时统一由 define(&#39;WP_HOME&#39;, ...) 强制协议。
+
+PHP 不认识自己跑在 HTTPS 下：入口是 HTTPS，但后端 Nginx 到 PHP-FPM 是 HTTP，PHP 判断协议出错，重定向时把自己甩回 http，形成跳转循环。要在后端 fastcgi 参数里显式声明：
+location ~ \.php$ &#123;    fastcgi_pass 127.0.0.1:9000;    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;    fastcgi_param HTTPS on;          #  关键：告诉 PHP 前置是 HTTPS    include fastcgi_params;&#125;
+
+这个问题排查花了我们不少时间：现象是登录页无限跳转，最后靠翻 PHP 框架源码里 is_ssl() 的判断逻辑才定位到。
+4. SSL 参数优化ssl_session_cache shared:SSL:10m;      # 会话复用，减少重复握手ssl_session_timeout 1440m;ssl_protocols TLSv1.2 TLSv1.3;         # 生产禁用 TLS 1.0/1.1ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE:!NULL:!MD5:!RC4;ssl_prefer_server_ciphers on;
+
+另外可以配合入口层的两个强化项：HSTS（add_header Strict-Transport-Security &quot;max-age=31536000&quot; always;）和证书到期监控（openssl s_client | openssl x509 -noout -enddate，到期前 30 天必须告警——证书过期导致全站警告这件事，每年都能在朋友圈看到别人家的翻车）。
+五、顺手做的性能优化高可用改造的同时，把入口层参数也调了一轮：
+# 系统层：文件句柄echo &#x27;* soft nofile 65535* hard nofile 65535&#x27; &gt;&gt; /etc/security/limits.conf# Nginx 层worker_processes auto;worker_cpu_affinity auto;          # worker 绑核，减少 CPU 切换损耗worker_rlimit_nofile 30000;events &#123;    worker_connections 10240;&#125;http &#123;    sendfile on;                   # 零拷贝传静态文件    tcp_nopush on;    gzip on;                       # 文本资源压缩，省 60% 以上流量    gzip_min_length 1024;    gzip_types text/plain text/css application/json application/javascript;    server_tokens off;             # 隐藏版本号    client_max_body_size 200m;     # 覆盖上传限制&#125;
+
+代理到后端的连接池也会配（否则每个用户请求都跟后端新握手一次）：
+upstream backend &#123;    server 172.18.1.8:8080;    keepalive 32;&#125;location / &#123;    proxy_pass http://backend;    proxy_http_version 1.1;    proxy_set_header Connection &quot;&quot;;&#125;
+
+我们压测对比过：开 keepalive 之后同一并发下后端的连接数下降一大半；而静态文件交给 Nginx 直接服务时，同样的并发下 QPS 能到 Tomcat 的四倍以上（九千多对两千左右）——这就是动静分离的收益。
+六、巡检和证书管理改完之后给运维组加了几条日常巡检动作：
+systemctl status nginx                 # 服务状态ss -lntp | grep nginx                  # 80/443 监听tail -100 /var/log/nginx/error.log     # 错误日志grep -c &quot;connect() failed&quot; /var/log/nginx/error.log   # 502 前兆df -h | grep /var/log                  # 日志盘空间openssl x509 -enddate -noout -in /etc/nginx/ssl/www.pem  # 证书到期
+
+每周看一次慢接口 TOP 和状态码分布，把问题发现在用户投诉之前——这套巡检清单沿用到现在。
+七、总结高可用和 HTTPS 这两件事，配置本身都不复杂，真正决定成败的是细节：Keepalived 要能感知 Nginx 死活、非抢占式要两台都改、HTTPS 要处理应用层的协议识别。做完这一轮，入口层从”最脆弱的一环”变成了整个链路里最稳的一层。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Nginx</tag>
+        <tag>高可用</tag>
+        <tag>HTTPS</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>SSH 免密登录与安全加固实战：从密钥原理到排障</title>
+    <url>/2023/12/06/SSH%E5%85%8D%E5%AF%86%E7%99%BB%E5%BD%95%E4%B8%8E%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA%E5%AE%9E%E6%88%98/</url>
+    <content><![CDATA[SSH 免密登录与安全加固实战：从密钥原理到排障一次例行的安全扫描结果里，我管理的服务器 22 端口一周被尝试登录几十万次——虽然都没有成功，但一直在”裸奔”也知道迟早出事。那周做了一次全量加固：密钥认证替代密码、sshd 参数收紧、加上 fail2ban。这篇把过程和踩过的坑记录下来。
+一、SSH 登录到底是怎么完成的SSH 用”非对称加密做身份认证 + 对称加密传数据”：
+
+建立连接时双方协商出临时会话密钥（Diffie-Hellman），之后的数据都用对称加密（AES&#x2F;ChaCha20）传；
+认证阶段二选一：密码认证，或者密钥认证——客户端持有私钥，服务端存公钥，登录时用私钥对随机挑战签名；
+首次连接会提示指纹（host key），用来确认连的是目标机器，防中间人。
+
+密钥认证为什么比密码安全：私钥不出本机，服务端只存公钥，没有”密码在网络上传递”这个环节，也就不怕暴力猜解。
+二、免密登录：三个文件两个权限# 1) 生成密钥对（ed25519 比 rsa 更短更安全）ssh-keygen -t ed25519 -C &quot;ops@ops-master&quot; -N &quot;&quot; -f ~/.ssh/id_ed25519#   id_ed25519       私钥：绝不出本机，权限 600#   id_ed25519.pub   公钥：分发到所有目标服务器# 2) 分发公钥ssh-copy-id -i ~/.ssh/id_ed25519.pub 172.18.1.7# 手动方式（图形客户端或没装 ssh-copy-id 时）mkdir -p ~/.ssh &amp;&amp; chmod 700 ~/.sshvim ~/.ssh/authorized_keys        # 粘贴公钥chmod 600 ~/.ssh/authorized_keys# 3) 验证ssh 172.18.1.7 &#x27;hostname&#x27;
+
+权限：免密失败的 90% 原因sshd 开了严格模式后，对”家目录 → .ssh → authorized_keys”整条链路的权限非常敏感：
+
+
+
+对象
+要求
+说明
+
+
+
+~/.ssh/
+700
+其他人不可进入
+
+
+~/.ssh/authorized_keys
+600
+只有属主能读写
+
+
+家目录 ~
+组&#x2F;其他用户不可写
+750 或 700 都行，禁止 775&#x2F;777
+
+
+私钥
+600
+被读出等于裸奔
+
+
+# 逐层检查修复（千万别对 /root 用 -R 递归，会把系统文件权限改坏）ls -ld /root /root/.sshchmod 700 /root/.sshchmod 600 /root/.ssh/authorized_keyschown root:root /root /root/.ssh /root/.ssh/authorized_keys
+
+顺带纠正一个流传很广的”加固建议”：把家目录改成 550&#x2F;555。这是过度加固——官方只要求”组&#x2F;其他用户不可写”，改成 550 连 root 自己都建不了文件，是纯粹的自找麻烦。
+三、免密失败排查：别瞎试，按顺序来# 1) 确认服务端开着密钥认证grep -i &quot;pubkeyauthentication&quot; /etc/ssh/sshd_config# 2) 客户端 -vvv 看握手全过程（最有效的一步）ssh -vvv 172.18.1.7#    Offering public key: ...              提交了哪把公钥#    Authentications that can continue: password   服务端拒绝了密钥#    Server accepts key                    认证通过# 3) 服务端日志（免密失败时的关键证据）tail -50 /var/log/secure           # RHEL/CentOSjournalctl -u sshd -n 50           # systemd 系统#    Authentication refused: bad ownership or modes ...   → 权限问题#    No supported authentication methods available        → 没配密钥/客户端没带对私钥# 4) 网络层nc -vz 172.18.1.7 22
+
+按”权限 → 配置 → 日志 → 网络”的顺序走，四步之内基本都能定位，比反复重试 ssh-copy-id 高效得多。
+四、sshd 加固：逐条说明服务器只要开着 22 端口，被扫描是持续的。加固项一次配齐：
+vim /etc/ssh/sshd_config
+
+Port 1022                       # 1) 改默认端口，避开批量扫描（防火墙要放行新端口）PermitRootLogin no              # 2) 禁止 root 直连，强制走普通用户+sudoPasswordAuthentication no       # 3) 关密码认证，只允许密钥PubkeyAuthentication yesMaxAuthTries 3                  # 4) 最多试 3 次，防爆破MaxSessions 10                  # 5) 单连接会话上限AllowUsers ops01 ops02          # 6) 只允许白名单用户登录ClientAliveInterval 300         # 7) 300 秒无活动发心跳ClientAliveCountMax 2           # 8) 连续 2 次无响应踢下线，防僵尸会话LoginGraceTime 30               # 9) 30 秒内必须完成认证UseDNS no                       # 10) 不反查 DNS，登录不再转圈十几秒GSSAPIAuthentication no         # 11) 关 GSSAPI，同样为提速
+
+改完先校验再平滑重载——千万不要直接 restart，断线就可能把自己锁在外面：
+sshd -t &amp;&amp; systemctl reload sshdsystemctl status sshd
+
+
+加固翻车自救：真把自己锁了，用云控制台 VNC 进去改回来。规避办法是改 sshd 前先开一个 tmux&#x2F;screen 会话保活，这样即使新连接失败，旧会话还在。
+
+另外建议顺手起一个 fail2ban：PasswordAuthentication no 之后爆破实际打不进来，但 fail2ban 能把持续扫描的 IP 直接封掉，日志和告警都清净很多。
+五、日常连接技巧环境稳定之后，用 ~/.ssh/config 把常用连接固化成别名：
+Host web01    HostName 172.18.1.7    User ops    Port 1022# 连接复用：第一次认证后，后续连接走同一隧道（跳板场景提速明显）Host 10.0.8.*    ControlMaster auto    ControlPath ~/.ssh/cm-%r@%h:%p    ControlPersist 4h# 跳板直连：一条命令穿透跳板到内网机器Host 172.18.1.7    ProxyJump ops@10.0.8.31
+
+ssh web01                                   # 少打一半字ssh -J ops@10.0.8.31 root@172.18.1.7        # 不走配置文件时的跳板直连eval &quot;$(ssh-agent -s)&quot; &amp;&amp; ssh-add ~/.ssh/id_ed25519   # 私钥有口令时只用输一次scp app.tar.gz web01:/data/app/             # 传单个文件rsync -avz --progress /data/app/ web01:/data/app/     # 增量同步用 rsync
+
+多台机器批量执行命令时用循环顶一下可以，真到几十台就该上 Ansible：
+for ip in 10.0.8.&#123;7..10&#125;; do ssh $ip &#x27;uptime&#x27;; done
+
+
+注意：for + ssh 这种写法没有并发控制，机器一多就会把本机的连接数打满，正式批量操作还是交给 Ansible。
+
+六、常见故障对照
+
+
+现象
+原因
+处理
+
+
+
+Permission denied (publickey,password)
+密钥&#x2F;权限&#x2F;配置之一有问题
+按”四步排查”走一遍
+
+
+Host key verification failed
+目标机重装&#x2F;换密钥，指纹变了
+确认后删除 known_hosts 中对应条目重连
+
+
+Too many authentication failures
+客户端一次带出太多私钥，超过 MaxAuthTries
+ssh -o IdentitiesOnly=yes -i 指定私钥
+
+
+Connection refused
+端口没开&#x2F;服务没起&#x2F;防火墙
+nc -vz 测端口，查 sshd 状态
+
+
+登录很慢（十几秒）
+DNS 反查 &#x2F; GSSAPI
+两端都关 UseDNS、GSSAPIAuthentication
+
+
+Connection reset by peer
+被 fail2ban&#x2F;安全组拦截
+查 fail2ban 日志、云控制台安全组
+
+
+登录后频繁断线
+心跳配置太激进&#x2F;链路抖动
+调大 ClientAliveInterval
+
+
+七、小结SSH 加固做完之后有两个立竿见影的效果：爆破日志量直接归零，日常登录速度也快了一截（关掉 DNS 反查的功劳）。几条经验总结：密钥体系要尽早建立，别等被扫了才动手；改 sshd 配置永远”先保活会话再动刀”；免密问题先看权限再看日志，九成问题在权限上。
+]]></content>
+      <categories>
+        <category>网络与安全</category>
+      </categories>
+      <tags>
+        <tag>SSH</tag>
+        <tag>安全加固</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Tomcat 部署与 JVM 调优实战：从安装到生产基线</title>
+    <url>/2023/09/06/Tomcat%E9%83%A8%E7%BD%B2%E4%B8%8EJVM%E8%B0%83%E4%BC%98%E5%AE%9E%E6%88%98/</url>
+    <content><![CDATA[Tomcat 部署与 JVM 调优实战：从安装到生产基线第一次独立接手 Java 应用时，开发只丢过来一个 war 包和一句”部署到服务器上”，剩下的全是我自己的事：装什么环境、配哪些参数、日志放哪、内存给多少。Tomcat 本身不难装，难的是把它调到一个”生产敢用”的状态——这套配置后来成了我部署所有 Java 应用的标准动作。
+一、先弄清楚 Tomcat 在生产里的位置Tomcat 是 Servlet 容器，Java 应用跑在它里面。类比一下：PHP 站点要 Nginx 配 PHP-FPM 才能跑，Java 应用就需要 Tomcat 这个容器。
+它自己带 HTTP 服务能力（默认 8080），但静态文件处理比 Nginx 差得远，所以生产上标准姿势是：
+
+用户请求 → Nginx（80&#x2F;443）→ Tomcat（8080）；
+静态资源（图片、CSS、JS）Nginx 直接返回，动态请求才转发给 Tomcat；
+8080 端口只对内网负载均衡节点开放，绝不对公网暴露。
+
+这里有个我踩过的坑：最初图省事直接把 8080 开到公网，扫描器几天就找上门了——Tomcat 的指纹太好认，默认页面加上版本号，等于把攻击面白送出去。
+二、安装与托管1. JDK 环境# 安装 JDK 1.8（兼容性最好的版本，生产上跑老项目的首选）yum install -y java-1.8.0-openjdk java-1.8.0-openjdk-develjava -version# 配 JAVA_HOME（Tomcat 启动脚本依赖它）echo &#x27;export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk&#x27; &gt;&gt; /etc/profileecho &#x27;export PATH=$JAVA_HOME/bin:$PATH&#x27; &gt;&gt; /etc/profilesource /etc/profile
+
+2. 安装 Tomcatcd /usr/localwget https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.80/bin/apache-tomcat-9.0.80.tar.gztar -zxvf apache-tomcat-9.0.80.tar.gzmv apache-tomcat-9.0.80 tomcat   # 目录名改短，脚本里不用到处写版本号
+
+3. 交给 systemd 托管裸跑 startup.sh 的问题是进程崩了没人拉起来，也没法开机自启。写一个 unit：
+vim /usr/lib/systemd/system/tomcat.service
+
+[Unit]Description=Apache Tomcat Web Application ContainerAfter=network.target[Service]Type=forkingJAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdkCATALINA_HOME=/usr/local/tomcatCATALINA_BASE=/usr/local/tomcatPIDFile=/usr/local/tomcat/tomcat.pidExecStart=/usr/local/tomcat/bin/startup.shExecStop=/usr/local/tomcat/bin/shutdown.shRestart=on-failureUser=root[Install]WantedBy=multi-user.target
+
+systemctl daemon-reloadsystemctl start tomcat &amp;&amp; systemctl enable tomcatsystemctl status tomcatfirewall-cmd --add-port=8080/tcp --permanent &amp;&amp; firewall-cmd --reload
+
+访问 http://服务器IP:8080 看到 Tomcat 欢迎页就算通了。
+
+User=root 是先跑通的写法，生产要换成普通用户，见后面安全基线一节。
+
+三、server.xml：三个端口和一个层级结构conf/server.xml 是 Tomcat 的主配置，地位等同于 Nginx 的 nginx.conf，结构是「Server → Service → Connector + Engine → Host → Context」层层嵌套。真正需要动的是这几个：
+&lt;!-- 1. 关闭端口：默认 8005，收到 SHUTDOWN 字符串就关服务。生产必须改 --&gt;&lt;Server port=&quot;18005&quot; shutdown=&quot;随机字符串&quot; address=&quot;127.0.0.1&quot;&gt;    &lt;Service name=&quot;Catalina&quot;&gt;        &lt;!-- 2. HTTP 连接器：默认 8080，用户访问入口 --&gt;        &lt;Connector port=&quot;8080&quot; protocol=&quot;HTTP/1.1&quot;                   connectionTimeout=&quot;20000&quot;                   redirectPort=&quot;8443&quot; /&gt;        &lt;!-- 3. AJP 连接器：默认 8009，与 Apache httpd 配合用，生产用不到 --&gt;        &lt;!-- 幽灵猫漏洞（CVE-2020-1938）就出在它身上，直接注释掉 --&gt;        &lt;!-- &lt;Connector port=&quot;8009&quot; protocol=&quot;AJP/1.3&quot; redirectPort=&quot;8443&quot; /&gt; --&gt;    &lt;/Service&gt;&lt;/Server&gt;
+
+Host 对应 Nginx 的 server 块（一个域名站点），Context 对应 location（一个访问路径指向哪个应用）：
+&lt;Engine name=&quot;Catalina&quot; defaultHost=&quot;localhost&quot;&gt;    &lt;Host name=&quot;localhost&quot; appBase=&quot;webapps&quot; unpackWARs=&quot;true&quot; autoDeploy=&quot;true&quot;&gt;        &lt;!-- 访问 /admin 时代码从 /data/project/admin.war 加载 --&gt;        &lt;Context path=&quot;/admin&quot; docBase=&quot;/data/project/admin.war&quot; reloadable=&quot;true&quot; /&gt;    &lt;/Host&gt;&lt;/Engine&gt;
+
+默认 8005 那个关闭端口很危险——本机任意用户都能发个字符串让 Tomcat 退出，所以生产环境把它改掉、绑到 127.0.0.1、关闭命令换成随机串。
+四、war 包部署：三种方式，生产选第三种
+
+
+方式
+操作
+适用
+
+
+
+自动部署
+war 丢进 webapps/，自动解压加载
+测试环境，图快
+
+
+改 server.xml 加 Context
+路径自定义，但要重启
+少用
+
+
+独立 xml 配置文件
+conf/Catalina/域名/xxx.xml，一个项目一个文件
+生产首选
+
+
+第三种是我现在的标准做法：不碰主配置、热部署、回滚方便。
+mkdir -p /usr/local/tomcat/conf/Catalina/localhost/vim /usr/local/tomcat/conf/Catalina/localhost/test.xml
+
+&lt;Context docBase=&quot;/data/project/test.war&quot; reloadable=&quot;true&quot; /&gt;
+
+文件名就是访问路径，访问 http://IP:8080/test/ 即可。想让项目直接挂根路径，把 war 命名为 ROOT.war。
+发布规范上我们后来固定成一条流程：war 包先放 /data/release/ 带版本号归档 → 停实例（集群节点轮流停）→ 替换 → 起服务 → curl -I 验证 → 观察 5 分钟再动下一个节点。目的是任何一次发布都能在 3 分钟内退回上一个版本。
+五、Connector 线程池：先搞清楚参数关系Tomcat 8 之后默认就是 NIO，日常够用；追求更高并发可以上 NIO2。真正要调的是线程和连接数参数：
+&lt;Connector port=&quot;8080&quot; protocol=&quot;org.apache.coyote.http11.Http11Nio2Protocol&quot;           maxThreads=&quot;500&quot;          &lt;!-- 最大工作线程：同一时刻能处理多少请求 --&gt;           minSpareThreads=&quot;50&quot;      &lt;!-- 最小空闲线程，低于这个数就补 --&gt;           acceptCount=&quot;200&quot;         &lt;!-- 排队队列：线程满了之后最多排多少 --&gt;           maxConnections=&quot;10000&quot;    &lt;!-- 最大连接数：含排队中的，超过直接拒 --&gt;           connectionTimeout=&quot;10000&quot;           enableLookups=&quot;false&quot;     &lt;!-- 关 DNS 反查 --&gt;           URIEncoding=&quot;UTF-8&quot;           server=&quot;Unknown&quot; /&gt;       &lt;!-- 隐藏版本号 --&gt;
+
+有两组关系值得记住：
+
+maxThreads + acceptCount 就是这台机器能扛的瞬时请求上限，超了就是连接被拒；
+线程数不是越大越好，500 以上还压不住，通常是后端有慢逻辑，加大线程只会让上下文切换把 CPU 吃光。
+
+我们压测过一次：4 核 8G 的机器，maxThreads 从 200 加到 500，QPS 提升不到 10%，但 Load 上升明显——线程池要按压测结果调，不要拍脑袋。
+六、JVM 参数：默认值就是等着出事故Tomcat 默认堆小得可怜，稍微有点流量就 OOM。参数写在 bin/catalina.sh 顶部：
+JAVA_OPTS=&quot;-server-Xms2048m-Xmx2048m-Xmn768m-XX:MetaspaceSize=256m-XX:MaxMetaspaceSize=512m-XX:+UseG1GC-XX:MaxGCPauseMillis=200-Xloggc:/data/logs/tomcat/gc.log-XX:+PrintGCDetails-XX:+PrintGCDateStamps-XX:+HeapDumpOnOutOfMemoryError-XX:HeapDumpPath=/data/logs/tomcat/oom.hprof-Djava.awt.headless=true-Dfile.encoding=UTF-8&quot;
+
+几个关键项：
+
+-Xms 和 -Xmx 设成一样，避免堆动态伸缩带来的抖动；
+元空间默认太小，Spring 系应用类加载多，不调大很容易 Metaspace OOM；
+-XX:+HeapDumpOnOutOfMemoryError 必开——OOM 发生时现场只出现一次，有 dump 才有得分析；
+GC 日志必开，Full GC 频率是判断”内存够不够”最直接的指标。
+
+OOM 排查路径真出事的时候，按这条线走，不要瞎猜：
+# 1. 先确认是什么类型的 OOMgrep -i &quot;OutOfMemory&quot; /usr/local/tomcat/logs/catalina.out#    Java heap space        → 堆满，对象太多或泄漏#    Metaspace              → 类加载泄漏，常见于反复热部署#    GC overhead limit      → 对象多到 GC 都来不及回收# 2. 看堆的实时状态jps -l                     # 找到 Tomcat 的 PIDjmap -heap PID             # 堆配置和当前占用jstat -gcutil PID 1000 5   # 每秒刷新，重点看 FGC 次数# 3. 定位&quot;谁在占内存&quot;jmap -histo PID | head -30   # 对象占用 TOP，疑似泄漏类一眼能看出来# 4. 有 dump 文件就用 MAT 打开，直接看 Leak Suspects 报告
+
+处理顺序也有讲究：先重启恢复业务（止血）→ 再决定调大 -Xmx（临时）→ 最后必须推动开发修代码里的泄漏（根治）。只做前两步的，过几天还会再来一次。
+七、日志：两块必须配置到位# catalina.out 无限增长，不切割几个月就能占满磁盘cat /etc/logrotate.d/tomcat
+
+/data/logs/tomcat/catalina.out &#123;    daily    rotate 30    compress    delaycompress    missingok    notifempty    copytruncate     # 不重启进程，先拷贝再清空    dateext&#125;
+
+访问日志要加耗时字段，这是排查慢接口的依据：
+&lt;Valve className=&quot;org.apache.catalina.valves.AccessLogValve&quot; directory=&quot;logs&quot;       prefix=&quot;localhost_access_log&quot; suffix=&quot;.txt&quot;       pattern=&quot;%h %l %u %t &amp;quot;%r&amp;quot; %s %b %D&quot; /&gt;&lt;!-- %D 是请求耗时（微秒），超过 3 秒的接口值得单独拉出来看 --&gt;
+
+另外两个约定：日志目录必须放到数据盘，别跟系统盘抢空间；日志级别生产固定 INFO，排查问题时临时开 DEBUG，查完立刻改回去——DEBUG 的日志量是 INFO 的几十倍，开一晚上能写满一块盘。
+八、上线前安全基线这份清单每次部署新实例都过一遍，一条都不能少：
+# 1. 删掉所有默认应用（管理页面是爆破重灾区）rm -rf webapps/&#123;ROOT,manager,host-manager,docs,examples&#125;# 2. 注释 AJP 连接器（Ghostcat 任意文件读取/命令执行）# 3. 改关闭端口 + 随机命令 + 绑 127.0.0.1# 4. Connector 加 server=&quot;Unknown&quot;，错误页不暴露版本# 5. 禁止 root 运行：建 tomcat 用户，chown 整个目录useradd tomcat -s /sbin/nologin -Mchown -R tomcat:tomcat /usr/local/tomcat# 6. 8080 只放行 Nginx 节点
+
+漏掉默认应用那次印象很深：manager 页面被外部扫到，一晚上几十万次爆破尝试，虽然密码复杂没被攻破，但日志量直接把磁盘告警打响了。
+最后Tomcat 的配置项不多，但要踩的坑基本都在”默认值”里：默认端口、默认堆、默认应用、默认权限。新人最容易犯的错是先跑起来再补配置——正确顺序是先按基线配好，再部署第一个应用。这份基线后来帮我省了很多次半夜被叫起来的时间。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Tomcat</tag>
+        <tag>JVM</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查</title>
+    <url>/2023/09/20/Tomcat%E9%9B%86%E7%BE%A4%E5%AE%9E%E6%88%98Nginx%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E4%B8%8ERedis%E4%BC%9A%E8%AF%9D%E5%85%B1%E4%BA%AB/</url>
+    <content><![CDATA[Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查单台 Tomcat 上线第一周就暴露了问题：一次发版重启，业务断了十几分钟；访问量一上来，CPU 直接顶到 100%。趁着业务还在爬坡期，把架构从单节点扩成了两节点集群——过程里踩的坑，比配置本身值得记录得多。
+一、从单机到两节点目标拓扑很常规：
+用户 → Nginx(lb01) → upstream → web01 / web02 (Tomcat)                          └──→ NFS 共享静态资源                          └──→ Redis 会话存储
+
+新节点的部署不是重装一遍，而是从老节点复制（前提是上一步的目录规范做得好）：
+# web01 上把程序目录和 systemd 配置推到 web02scp -rp /soft 172.18.1.8:/scp /usr/lib/systemd/system/tomcat.service 172.18.1.8:/usr/lib/systemd/system/# web02 上建立软链接、重载并启动ln -s /soft/apache-tomcat-9.0.34/ /soft/tomcatsystemctl daemon-reload &amp;&amp; systemctl start tomcat &amp;&amp; systemctl enable tomcat
+
+静态资源要共享，不然图片”时有时无”博客系统有上传目录（附件、头像），如果两个节点各存各的，用户刷新一下换到另一台机器，图片就 404。解决办法是所有节点挂载同一个 NFS 目录：
+# NFS 服务端cat /etc/exports/data/zrlog 172.18.1.0/24(rw,sync,all_squash,anonuid=666,anongid=666)# 所有 web 节点挂载到应用的附件目录mount -t nfs 172.18.1.31:/data/zrlog /zrlog/ROOT/attached/echo &quot;172.18.1.31:/data/zrlog /zrlog/ROOT/attached nfs defaults 0 0&quot; &gt;&gt; /etc/fstab
+
+注意 anonuid/anongid=666 要跟 Web 运行用户的 uid&#x2F;gid 对上，否则写文件会报权限拒绝——这是挂载 NFS 共享上传目录最常见的坑。
+Nginx 侧接入# /etc/nginx/conf.d/proxy_zrlog.confupstream zrlog &#123;    server 172.18.1.7:8080;    server 172.18.1.8:8080;&#125;server &#123;    listen 80;    server_name blog.example.com;    location / &#123;        proxy_pass http://zrlog;        include proxy_params;    &#125;&#125;
+
+proxy_params 是我单独维护的公共代理参数文件，所有代理站点统一 include：
+proxy_set_header Host $http_host;proxy_set_header X-Real-IP $remote_addr;proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;proxy_http_version 1.1;proxy_connect_timeout 30;proxy_send_timeout 60;proxy_read_timeout 60;proxy_buffering on;proxy_buffer_size 32k;proxy_buffers 4 128k;
+
+有个细节值得说：Nginx 默认会把请求头里的 Host 改写成 $proxy_host（也就是 upstream 里写的名字或 IP）。所以不管后端是 Tomcat 还是 Nginx，只要不显式透传，后端日志里看到的 Host 都可能不是用户实际访问的域名。想让后端保留真实域名，必须显式配置 proxy_set_header Host $http_host——这也是 proxy_params 第一行的由来。
+二、HTTPS 接入：证书放在哪一层证书统一放在负载均衡层，后端继续跑 HTTP，这样证书只维护一份：
+server &#123;    listen 443 ssl;    server_name blog.example.com;    ssl_certificate     ssl_key/server.crt;    ssl_certificate_key ssl_key/server.key;    location / &#123;        proxy_pass http://zrlog;        include proxy_params;    &#125;&#125;server &#123;    listen 80;    server_name blog.example.com;    return 302 https://$server_name$request_uri;&#125;
+
+三、会话保持：轮询之后，用户开始”随机掉登录”这一节是这次扩容最大的教训。
+两台 Tomcat 配好轮询之后，问题来了：用户登录后刷新页面，经常又跳回登录页。原因是默认的会话（session）存在单机的内存里——第一次请求落到 web01，session 存在 web01；下一次请求被轮询到 web02，web02 不认识这个 session，就当未登录处理。
+会话保持的几种方案，我们对比过：
+
+
+
+方案
+原理
+问题
+
+
+
+ip_hash
+按客户端 IP 固定后端
+出口 IP 相同的用户全压一台；节点故障时登录态丢失
+
+
+session 复制
+Tomcat 集群自动同步 session
+节点超过 4 个性能急剧下降
+
+
+统一会话存储
+session 存 Redis&#x2F;MySQL
+需要改造，但最稳
+
+
+生产上选的是 Redis：多台 Tomcat 共享一份会话数据，任意节点宕机，用户换到另一台照样是登录状态。
+接入步骤# 1. 下载 tomcat-cluster-redis-session-manager（开源项目，GitHub 可搜）wget https://github.com/ran-jit/tomcat-cluster-redis-session-manager/releases/download/4.0/tomcat-cluster-redis-session-manager.zipunzip tomcat-cluster-redis-session-manager.zip# 2. jar 包进 Tomcat 的 libcp tomcat-cluster-redis-session-manager/lib/* /soft/tomcat/lib/# 3. 配置文件进 Tomcat 的 conf，改 Redis 地址cp tomcat-cluster-redis-session-manager/conf/redis-data-cache.properties /soft/tomcat/conf/vim /soft/tomcat/conf/redis-data-cache.propertiesredis.hosts=172.18.1.51:6379# 4. 在 conf/context.xml 的 &lt;/Context&gt; 前加两行&lt;Valve className=&quot;tomcat.request.session.redis.SessionHandlerValve&quot; /&gt;&lt;Manager className=&quot;tomcat.request.session.redis.SessionManager&quot; /&gt;
+
+改完一台，用 rsync 无差异同步到另一台，再重启 Tomcat。升级后的效果：随便停哪台节点，用户无感知，请求被自动转到另一台。
+
+一定记得让两个节点的配置完全一致——session 序列化方式、jar 版本只要有一点不同，就会出现”这台能登录、那台报错”的诡异现象。
+
+四、故障排查实战集群跑稳之后，值班时遇到的高频故障就是这几类，逐个记一下排查路径。
+1. 启动失败：先看三件事# 1) 服务状态systemctl status tomcat# 2) 启动日志（最直接）tail -100 /usr/local/tomcat/logs/catalina.out# 3) 实在看不出，前台启动看完整报错/usr/local/tomcat/bin/catalina.sh run
+
+高频原因就三个：端口被占（Address already in use，ss -ntlp | grep 8080 找进程）、JAVA_HOME 没配好、war 包本身有问题。启动成功后的验证动作：ss -lntp | grep 8080 &amp;&amp; curl -I http://127.0.0.1:8080。
+2. CPU 100%：从进程找到那行代码top -c                  # 找到最耗 CPU 的 java 进程top -Hp &lt;PID&gt;           # 进程内按线程排序，记下最高的线程号printf &#x27;%x\n&#x27; 12345     # 转成十六进制，jstack 里线程 ID 是这个格式jstack &lt;PID&gt; | grep -A 20 &quot;0x3039&quot;   # 直接看线程栈
+
+栈顶如果是业务代码 → 大概率死循环，找开发修；如果是 GC 线程 → 回到堆内存问题。这套”进程 → 线程 → 栈”的路径，比看监控图猜要快得多。
+3. 响应慢 &#x2F; 线程池满：先看访问日志的耗时# 访问日志里 %D 字段是耗时（微秒），超过 3 秒的单独看awk &#x27;&#123;if ($NF &gt; 3000000) print&#125;&#x27; /usr/local/tomcat/logs/localhost_access_log.*.txt | tail# 看线程池状态jstack &lt;PID&gt; | grep &quot;http-nio&quot; | wc -l      # 活跃 HTTP 线程数jstack &lt;PID&gt; | grep -c &quot;RUNNABLE&quot;
+
+线程数长期贴着 maxThreads、大量线程 BLOCKED，就是线程池打满的信号。往下追通常是慢 SQL 或者第三方接口没设超时——这两个占我们遇到的慢请求原因的一大半。
+五、复盘这次集群改造最值钱的不是配置本身，而是暴露出来的两个认知：
+
+有状态的服务不能无脑加节点——session、上传文件、本地缓存，任何”存在本机”的东西，都会在集群下变成故障源；
+排查顺序固定下来能省时间——启动问题看日志、CPU 问题看线程栈、慢请求看耗时字段，先分类再动手，比上来就重启强。
+
+后来我们给集群加了两条约束：任何新服务上线前确认”状态是否外置”，发版必须逐节点滚动并验证，这两条规矩到现在没出过事故。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Nginx</tag>
+        <tag>负载均衡</tag>
+        <tag>Tomcat</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>DNS 解析原理与排障实战</title>
+    <url>/2023/08/17/dns%E8%A7%A3%E6%9E%90%E5%8E%9F%E7%90%86%E4%B8%8E%E6%8E%92%E9%9A%9C%E5%AE%9E%E6%88%98/</url>
+    <content><![CDATA[DNS 解析原理与排障实战“网站打不开”的排查里，DNS 是最容易被忽略、又最常出问题的一层——IP 能访问、域名不能，十有八九就是它。这篇把 DNS 的完整解析流程和排障方法讲透。
+一、DNS 是什么DNS（域名系统）把域名翻译成 IP，好比电话簿：记名字不记号码。端口：一般走 UDP 53，数据量大或区域传输时走 TCP 53。
+常用记录类型：
+
+
+
+记录
+作用
+示例
+
+
+
+A
+域名 → IPv4
+www.example.com → 1.1.1.1
+
+
+AAAA
+域名 → IPv6
+—
+
+
+CNAME
+别名（CDN 加速常用）
+www 指向 cdn.example.com
+
+
+常用公共 DNS：阿里 223.5.5.5、腾讯 119.29.29.29、114.114.114.114、谷歌 8.8.8.8。
+二、完整解析流程（递归 + 迭代）以浏览器输入 www.baidu.com 为例：
+第1步 查浏览器缓存第2步 查操作系统缓存第3步 查本地 hosts 文件（Windows: C:\Windows\System32\drivers\etc\hosts；Linux: /etc/hosts）第4步 都没命中 → 请求本地 DNS 服务器（LDNS，如 223.5.5.5）【递归查询】第5步 LDNS 先查自己的缓存，没有则开始【迭代查询】：   ① LDNS 问根域名服务器&quot;.&quot;（全球 13 个根，内置在 LDNS 里）   ② 根服务器返回 .com 顶级域服务器 IP   ③ LDNS 问 .com 顶级域服务器 → 返回 baidu.com 权威服务器 IP   ④ LDNS 问 baidu.com 权威服务器 → 权威服务器查 A 记录，返回 www.baidu.com 的 IP第6步 LDNS 缓存一份，把 IP 返回给客户端；客户端也缓存一份第7步 浏览器用 IP 与服务器建立 TCP 连接
+
+两种查询方式（面试必答）：
+
+递归查询：客户端 → 本地 DNS。客户端只问一次，LDNS 负责跑腿；
+迭代查询：本地 DNS → 根 → 顶级 → 权威。LDNS 逐级问，每级只告诉”下一级去哪问”。
+
+三、排障命令yum install -y bind-utilsdig www.baidu.com            # 最详细（推荐）dig +trace www.baidu.com     # 看完整迭代链路（劫持排查神器）nslookup www.baidu.com       # 基础查询host www.baidu.com           # 精简查询# 常见排查点：cat /etc/resolv.conf         # nameserver 配置grep domain /etc/hosts       # hosts 有没有被污染
+
+四、三个真实故障案例案例 1：网站突然打不开，IP 能访问、域名不能排查链路：nslookup 域名 → 超时&#x2F;无记录 → 查 /etc/resolv.conf → 发现 nameserver 写的是内网 DNS → 换 223.5.5.5 立即可解析。
+根因：公司内网 DNS 故障&#x2F;上游被污染。解决：切换 DNS 或同时配置多个 nameserver（nameserver 223.5.5.5 + nameserver 114.114.114.114）。
+案例 2：dig +trace 发现权威服务器返回异常 IP（域名被劫持）现象：解析结果指向一个不明 IP，访问弹广告。
+处理：联系域名服务商核查解析记录；检查是否有 CNAME 被篡改；确认域名管理后台没有被盗号（查登录记录、改强密码）。
+案例 3：CDN 切换后部分地区访问慢现象：CDN 配置已切换，但部分用户还访问旧节点。
+根因：LDNS 缓存了旧 IP，TTL 未到。处理：等 TTL 过期，或通知运营商刷新缓存。
+生产规范：改解析前先看当前 TTL，提前把 TTL 调小（如 300 秒）再改记录，改完再恢复 TTL——避免切换后长时间缓存旧地址。
+五、DNS 排障心法遇到”域名不通”，按这个顺序走：本机 dig 看解析结果 → hosts 有没有污染 → resolv.conf 对不对 → 换公共 DNS 交叉验证 → dig +trace 看链路 → 联系域名服务商。其中”换公共 DNS 交叉验证”能快速区分是”本地 DNS 问题”还是”权威解析问题”，是效率最高的一步。
+]]></content>
+      <categories>
+        <category>网络与安全</category>
+      </categories>
+      <tags>
+        <tag>DNS</tag>
+        <tag>网络</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>HTTP 协议与 Web 服务排障</title>
+    <url>/2023/08/24/http%E5%8D%8F%E8%AE%AE%E4%B8%8Eweb%E6%9C%8D%E5%8A%A1%E6%8E%92%E9%9A%9C/</url>
+    <content><![CDATA[HTTP 协议与 Web 服务排障浏览器报个 502、504，运维的第一反应应该不是”重启”,而是能准确说出这个状态码代表哪一层出了问题。这篇把 HTTP 协议的生产用法整理成一套排障体系。
+一、HTTP 是什么HTTP（超文本传输协议）把超文本文档从 Web 服务器传输到浏览器，应用层协议，基于 TCP 80&#x2F;443。
+URL 组成：协议://主机:端口/路径。三个特点：
+
+请求&#x2F;响应模型：客户端发请求，服务端回响应；
+无状态：HTTP 本身不记录用户状态（靠 Cookie&#x2F;Session 补）；
+基于 TCP：先三次握手，再传 HTTP 报文。
+
+一条命令看全流程（curl -v 是 Web 排障的第一工具）：
+curl -v http://www.example.com/# Trying 1.1.1.1...          ← DNS 解析出的 IP# Connected to ...            ← TCP 连接建立（三次握手）# &gt; GET /index.html HTTP/1.1  ← 发出请求# &lt; HTTP/1.1 200 OK           ← 收到响应
+
+二、请求方法与响应结构GET vs POST：GET 参数在 URL 里（?a=1&amp;b=2），POST 参数在请求体里。POST 更安全——参数不留在日志和地址栏。
+响应报文：状态行（HTTP/1.1 200 OK）+ 头部 + 响应体。
+三、状态码：生产高频场景（面试必问）
+
+
+状态码
+含义
+排障方向
+
+
+
+502 Bad Gateway
+反向代理连不上后端（Tomcat 挂了&#x2F;端口不通&#x2F;连接数满）
+ss -lnt 看后端端口 → tail 后端日志 → curl 后端健康检查
+
+
+504 Gateway Timeout
+连上了后端但响应超时（后端慢&#x2F;排队）
+后端日志、慢查询、线程池满
+
+
+503 Service Unavailable
+服务暂时不可用（重启&#x2F;维护&#x2F;限流）
+看部署状态、限流配置
+
+
+403 Forbidden
+无权限（nginx deny&#x2F;目录权限）
+nginx 配置、文件权限
+
+
+404 Not Found
+资源不存在
+路径写错、静态资源没部署
+
+
+curl -s -o /dev/null -w &quot;%&#123;http_code&#125;&quot; http://localhost/   # 快速看状态码
+
+四、关键头部字段（运维用途）
+
+
+头部
+运维用途
+
+
+
+Server
+curl -I 识别 Web 服务版本（安全审计&#x2F;指纹）
+
+
+Referer
+防盗链判断——图片 403 先看 Referer
+
+
+Host
+决定 Nginx 走哪个 server 块——多站点访问错页面先查 Host
+
+
+User-Agent
+区分爬虫&#x2F;正常用户（封爬虫按 UA）
+
+
+五、重定向 301&#x2F;302&#x2F;304301 永久重定向：域名换了 / HTTP 跳 HTTPS（SEO 权重转移）302 临时重定向：临时跳转（登录后跳回、活动页）304 Not Modified：资源没变直接用缓存（配合 Last-Modified/ETag）
+
+Nginx 配置示例：
+server &#123;    listen 80;    server_name www.example.com;    return 301 https://$host$request_uri;   # HTTP 全站跳 HTTPS&#125;
+
+六、PV &#x2F; UV &#x2F; IP（站长口径）PV（Page View）：页面浏览量，一个人点 2 次算 2 个 PVUV（Unique Visitor）：独立访客（去重 Cookie/设备），只算 1 个IP：独立 IP 数（同一 NAT 出口只算 1 个）
+
+经典计算题：公司大厦 100 人、每人 2 台设备、走同一个 NAT 出口、每人点 2 次 → PV&#x3D;400、UV&#x3D;200、IP&#x3D;1。PV ≥ UV ≥ IP 永远成立；IP 在 NAT 场景只是近似值。
+七、Web 全链路排障（面试讲故障故事用）用户报”网站打不开”，从外层到内层逐层看：
+用户浏览器 → DNS 解析 → 防火墙/安全组 → 负载均衡健康检查 → Nginx 日志(access/error) → Tomcat 日志 → MySQL 慢查询 → 监控图（Zabbix/Prometheus）
+
+入门手段永远是一句话：先 curl 本地确认服务在，再一层层往外查。用户反馈”打开慢”时用浏览器 F12 → Network → Timing 看各段耗时，定位是 DNS 慢、TCP 慢还是 TTFB（服务端处理慢）——比瞎猜快得多。
+HTTP 这一层是 Web 排障的”界面层”：状态码告诉你错在哪一段，头部告诉你细节，curl 帮你复现全过程。配合前面的 TCP 和 DNS 知识，一条链路就完整了。
+]]></content>
+      <categories>
+        <category>网络与安全</category>
+      </categories>
+      <tags>
+        <tag>网络</tag>
+        <tag>HTTP</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>iptables 防火墙实战：四表五链与 NAT 转发</title>
+    <url>/2023/06/15/iptables%E9%98%B2%E7%81%AB%E5%A2%99%E5%AE%9E%E6%88%98%E5%9B%9B%E8%A1%A8%E4%BA%94%E9%93%BE%E4%B8%8ENAT%E8%BD%AC%E5%8F%91/</url>
+    <content><![CDATA[iptables 防火墙实战：四表五链与 NAT 转发iptables 劝退很多人是因为命令又多又碎。但只要先把”四表五链 + 数据包流向”这个架构想明白，规则就是往架构里填句子。这篇从架构讲起，配合两个真实的 NAT 落地方案。
+一、架构：四表五链 + 数据包流向iptables 是操作内核 netfilter 的用户态工具，不是服务。规则存在内核内存，重启丢失，需手动保存。
+四张表决定”干什么”：
+
+
+
+表
+作用
+挂的链
+
+
+
+filter
+过滤（默认表）：放行&#x2F;丢弃
+INPUT, FORWARD, OUTPUT
+
+
+nat
+地址转换：改 IP&#x2F;端口
+PREROUTING, POSTROUTING, OUTPUT
+
+
+mangle
+改包属性（TTL&#x2F;TOS&#x2F;MARK）
+全部链
+
+
+raw
+绕过连接跟踪（高级优化）
+PREROUTING, OUTPUT
+
+
+五条链决定”什么时候干”：
+
+
+
+链
+触发时机
+
+
+
+PREROUTING
+路由判断前（进门）
+
+
+INPUT
+目的&#x3D;本机，进入进程前
+
+
+FORWARD
+本机转发（当路由器）
+
+
+OUTPUT
+本机进程发出后
+
+
+POSTROUTING
+路由判断后、出网卡前（出门）
+
+
+数据包两条主干路径必须背下来：
+访问本机：入网卡 → PREROUTING → 路由(本机) → INPUT → 进程 → OUTPUT → POSTROUTING → 出站帮人转发：入网卡 → PREROUTING → 路由(转发) → FORWARD → POSTROUTING → 出站
+
+二、常用规则写法# 查看（-v 带计数，-n 不反解域名）iptables -L -v -n# 放行/拒绝iptables -A INPUT -p tcp --dport 22 -j ACCEPTiptables -A INPUT -p tcp --dport 3306 -s 10.0.8.0/24 -j ACCEPT   # 只放行内网网段iptables -A INPUT -p tcp --dport 80 -j DROP# 删除规则：-D 或先 -L --line-numbers 看编号再删iptables -D INPUT -p tcp --dport 80 -j DROP
+
+高频概念：
+
+DROP vs REJECT：DROP 静默丢包（防扫描更安全，但客户端表现是超时）；REJECT 明确拒绝（利于调试，报错快）。对外防火墙用 DROP。
+匹配顺序：链内自上而下，命中即停。具体放行规则放前面，默认策略兜底。
+看命中次数：iptables -L -v -n 的 pkts&#x2F;bytes 列。排障时计数器不增长 &#x3D; 包根本没走到这条规则，往上游找。
+持久化：iptables-save &gt; /etc/sysconfig/iptables，开机 iptables-restore 恢复（或直接装 firewalld 管持久化）。
+
+三、案例 1：SNAT 共享上网场景：内网 20 台服务器走一台网关机器共享上网，网关双网卡（内网 + 公网）。
+# 1. 开启内核转发echo 1 &gt; /proc/sys/net/ipv4/ip_forward# 永久生效：/etc/sysctl.conf 里 net.ipv4.ip_forward=1 后 sysctl -p# 2. 内网过来的流量出公网时把源地址换成网关公网 IPiptables -t nat -A POSTROUTING -s 10.0.8.0/24 -o eth0 -j SNAT --to-source 100.64.8.1# 3. 放行 FORWARDiptables -A FORWARD -s 10.0.8.0/24 -j ACCEPTiptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+四、案例 2：DNAT 端口映射场景：公网访问 100.64.8.1:8080，映射到内网 Web 服务器 10.0.8.11:80。
+# 进网关的流量，目标地址改写为内网服务器iptables -t nat -A PREROUTING -d 100.64.8.1 -p tcp --dport 8080 -j DNAT --to-destination 10.0.8.11:80# 源地址也换成网关（否则内网服务器回包找不到&quot;公网客户端&quot;路由）iptables -t nat -A POSTROUTING -d 10.0.8.11 -p tcp --dport 80 -j SNAT --to-source 100.64.8.1# 放行 FORWARD，验证iptables -A FORWARD -p tcp --dport 80 -j ACCEPTcurl http://100.64.8.1:8080
+
+五、排障要点
+规则看起来对但不生效：先看 iptables -L -v -n 计数器，规则没命中就往上游（PREROUTING&#x2F;路由）排查；本机访问走 INPUT，转发走 FORWARD，别弄错链。
+NAT 后业务不通：八成忘了回程 SNAT，或没开 ip_forward。
+重启后规则全没了：没做 save&#x2F;restore——这句几乎每次踩坑都会被想起。
+
+iptables 上手后，内网隔离、端口映射、共享上网这些场景都能自己搞定，而”包往哪走”的架构感，也是后面学 nftables、云安全组时通用的底层认知。
+]]></content>
+      <categories>
+        <category>网络与安全</category>
+      </categories>
+      <tags>
+        <tag>网络</tag>
+        <tag>iptables</tag>
+        <tag>防火墙</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>JSON 速通：运维视角的配置规范与排错</title>
     <url>/2023/08/27/json%E9%80%9F%E9%80%9A%E8%BF%90%E7%BB%B4%E8%A7%86%E8%A7%92%E7%9A%84%E9%85%8D%E7%BD%AE%E8%A7%84%E8%8C%83%E4%B8%8E%E6%8E%92%E9%94%99/</url>
     <content><![CDATA[JSON 速通：运维视角的配置规范与排错运维每天都在和 JSON 打交道——Prometheus 告警规则、Grafana Dashboard、K8s 资源清单、各种服务配置文件，全是 JSON 或它的表亲 YAML。但大多数人只在”报错时”才想起它的语法。这篇用运维视角把 JSON 速通一遍。
@@ -181,6 +2434,50 @@ uname -r                 # 当前运行内核（看 el7/el8 后缀判断系）ca
       </tags>
   </entry>
   <entry>
+    <title>NFS 共享存储实战：从挂载到生产读写分离</title>
+    <url>/2023/07/06/nfs%E5%85%B1%E4%BA%AB%E5%AD%98%E5%82%A8%E5%AE%9E%E6%88%98%E4%BB%8E%E6%8C%82%E8%BD%BD%E5%88%B0%E7%94%9F%E4%BA%A7%E8%AF%BB%E5%86%99%E5%88%86%E7%A6%BB/</url>
+    <content><![CDATA[NFS 共享存储实战：从挂载到生产读写分离业务上线后没两天就会遇到一个问题：文件上传功能在多台服务器上各存各的，用户在 A 机传的图片，请求打到 B 机就 404 了。解法是让所有机器挂载同一份存储——NFS 是内网共享存储里最便宜、最常见的选择。这篇把 NFS 从原理到生产读写分离完整过一遍。
+一、先理解 NFS 在干什么NFS（Network File System）让你像用本地目录一样用远程目录。数据真正落在服务端，客户端只做挂载和读写。涉及两个角色：
+
+服务端：共享目录方，监听 2049 端口；NFSv3 还需要 rpcbind（端口映射服务）配合；
+客户端：挂载方，本地挂载点只是一个”门”，读写都打到服务端。
+
+一句话记忆：服务端出目录、客户端进目录，数据永远在服务端那份。
+二、服务端配置（6 步）# 1. 安装（内网按网段放行 2049/rpcbind 即可，不建议直接全关防火墙）yum install -y nfs-utils# 2. 配置共享目录 /etc/exports# 格式：共享路径  客户端地址(权限参数)/data  172.18.1.0/24(rw,sync,no_root_squash)   # 注意客户端地址与参数间没有空格# 3. 创建共享目录并授权mkdir -p /data &amp;&amp; chown -R nfsnobody:nfsnobody /data# 4. 启动并加入开机自启（rpcbind 提供 NFSv3 端口映射，一起启）systemctl start rpcbind &amp;&amp; systemctl start nfssystemctl enable rpcbind nfs# 5. 验证：端口监听 + 实际生效的导出信息ss -tulnp | grep 2049cat /var/lib/nfs/etab        # etab 里有 /data 记录，说明 exports 配置正确exportfs -rv                 # 修改 exports 后平滑加载，无需重启
+
+三、客户端挂载（6 步）# 1. 安装客户端yum install -y nfs-utils# 2. 查看服务端共享了什么showmount -e 172.18.1.31# 3. 挂载mkdir -p /nfsdirmount -t nfs 172.18.1.31:/data /nfsdir# 4. 验证df -h | grep nfsdir# 172.18.1.31:/data  62G  880M  58G  2%  /nfsdir# 5. 写入测试：客户端写，服务端能看到同一份echo &quot;test&quot; &gt; /nfsdir/test.txt &amp;&amp; ls -l /data/# 6. 开机挂载（生产必须加 _netdev，避免网络未就绪时挂载失败卡开机）echo &#x27;172.18.1.31:/data  /nfsdir  nfs  defaults,_netdev 0 0&#x27; &gt;&gt; /etc/fstabmount -a    # 写完 fstab 必须用 mount -a 验证
+
+卸载时提示 device is busy 是高频小坑：先 cd / 再 umount；实在不行 umount -lf 强制卸载。
+四、权限与安全：生产必配的参数NFS 的权限坑集中在身份映射上。服务端默认把客户端 root 映射成 nobody，但普通用户的 uid&#x2F;gid 会原样透传——两边 uid 对不上就会出现”文件能看到但没权限写”。
+统一身份的标准做法：all_squash + anonuid&#x2F;anongid
+# 服务端 exports：/data  172.18.1.0/24(rw,sync,all_squash,anonuid=666,anongid=666)# 服务端创建对应用户并授权useradd -u 666 -g 666 www -s /sbin/nologinchown -R 666.666 /data# 客户端也建同 uid 用户（统一身份，避免权限不足）useradd -u 666 -g 666 www -s /sbin/nologin
+
+这样不管客户端是谁写的，落盘统一变成 uid&#x3D;666，权限问题一次性根治。
+安全挂载参数（静默数据不需要执行权限）：
+mount -t nfs -o noexec,nodev,nosuid 172.18.1.31:/data /nfsdir# noexec：禁止执行（防上传木马被直接运行）# nodev / nosuid：禁设备文件与提权位
+
+性能参数（可选）： noatime,nodiratime 禁止更新访问时间戳，减少 NFS 写放大，高 IO 场景明显。
+五、生产案例：读写分离需求：静态资源读多写少，且不同目录权限隔离——/data/r 只读、/data/w 可写，都映射到 www(666)。
+# 服务端：mkdir -p /data/&#123;r,w&#125;echo &#x27;www:x:666:666::/home/www:/sbin/nologin&#x27; &gt;&gt; /etc/passwd  # 或 useradd -u 666cat &gt;&gt; /etc/exports &lt;&lt;&#x27;EOF&#x27;/data/r  172.18.1.0/24(ro,sync,all_squash,anonuid=666,anongid=666)/data/w  172.18.1.0/24(rw,sync,all_squash,anonuid=666,anongid=666)EOFexportfs -rv# 客户端：mount -t nfs 172.18.1.31:/data/r /data/rmount -t nfs 172.18.1.31:/data/w /data/wtouch /data/r/xx &amp;&amp; echo &quot;Read-only file system&quot;   # 只读目录写入报错（预期）echo ok &gt; /data/w/test                             # 可写目录正常
+
+六、排障要点
+挂载报 access denied：路径写错最常见——showmount -e 服务端 先看服务端实际导出的名字；
+挂载卡住&#x2F;超时：检查 rpcbind 是否启动、2049 与 rpc 端口（111）防火墙是否放行；
+改完 exports 不生效：exportfs -rv 平滑加载，别重启 NFS 中断业务；
+客户端看到文件但没权限：九成是 uid 不一致，按上面统一 anonuid 方案处理。
+
+NFS 本身不复杂，把”数据在服务端、权限靠 anonuid、安全靠 noexec”这三条记住，生产基本够用。它解决的是”共享”，备份和灾备就是下一篇文章的事了。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Linux</tag>
+        <tag>NFS</tag>
+        <tag>存储</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>rsync 备份体系：从命令到企业备份架构</title>
     <url>/2023/07/13/rsync%E5%A4%87%E4%BB%BD%E4%BD%93%E7%B3%BB%E4%BB%8E%E5%91%BD%E4%BB%A4%E5%88%B0%E4%BC%81%E4%B8%9A%E5%A4%87%E4%BB%BD%E6%9E%B6%E6%9E%84/</url>
     <content><![CDATA[rsync 备份体系：从命令到企业备份架构“数据没丢过”不代表备份做得对，”数据丢过且能恢复”才算。rsync 是 Linux 备份体系里最核心的工具——增量传输、断点续传、本地&#x2F;远程全支持。这篇从命令用法讲到企业级备份架构。
@@ -216,67 +2513,9 @@ uname -r                 # 当前运行内核（看 el7/el8 后缀判断系）ca
         <category>计算机运维</category>
       </categories>
       <tags>
+        <tag>备份</tag>
         <tag>Linux</tag>
         <tag>rsync</tag>
-        <tag>备份</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>DNS 解析原理与排障实战</title>
-    <url>/2023/08/17/dns%E8%A7%A3%E6%9E%90%E5%8E%9F%E7%90%86%E4%B8%8E%E6%8E%92%E9%9A%9C%E5%AE%9E%E6%88%98/</url>
-    <content><![CDATA[DNS 解析原理与排障实战“网站打不开”的排查里，DNS 是最容易被忽略、又最常出问题的一层——IP 能访问、域名不能，十有八九就是它。这篇把 DNS 的完整解析流程和排障方法讲透。
-一、DNS 是什么DNS（域名系统）把域名翻译成 IP，好比电话簿：记名字不记号码。端口：一般走 UDP 53，数据量大或区域传输时走 TCP 53。
-常用记录类型：
-
-
-
-记录
-作用
-示例
-
-
-
-A
-域名 → IPv4
-www.example.com → 1.1.1.1
-
-
-AAAA
-域名 → IPv6
-—
-
-
-CNAME
-别名（CDN 加速常用）
-www 指向 cdn.example.com
-
-
-常用公共 DNS：阿里 223.5.5.5、腾讯 119.29.29.29、114.114.114.114、谷歌 8.8.8.8。
-二、完整解析流程（递归 + 迭代）以浏览器输入 www.baidu.com 为例：
-第1步 查浏览器缓存第2步 查操作系统缓存第3步 查本地 hosts 文件（Windows: C:\Windows\System32\drivers\etc\hosts；Linux: /etc/hosts）第4步 都没命中 → 请求本地 DNS 服务器（LDNS，如 223.5.5.5）【递归查询】第5步 LDNS 先查自己的缓存，没有则开始【迭代查询】：   ① LDNS 问根域名服务器&quot;.&quot;（全球 13 个根，内置在 LDNS 里）   ② 根服务器返回 .com 顶级域服务器 IP   ③ LDNS 问 .com 顶级域服务器 → 返回 baidu.com 权威服务器 IP   ④ LDNS 问 baidu.com 权威服务器 → 权威服务器查 A 记录，返回 www.baidu.com 的 IP第6步 LDNS 缓存一份，把 IP 返回给客户端；客户端也缓存一份第7步 浏览器用 IP 与服务器建立 TCP 连接
-
-两种查询方式（面试必答）：
-
-递归查询：客户端 → 本地 DNS。客户端只问一次，LDNS 负责跑腿；
-迭代查询：本地 DNS → 根 → 顶级 → 权威。LDNS 逐级问，每级只告诉”下一级去哪问”。
-
-三、排障命令yum install -y bind-utilsdig www.baidu.com            # 最详细（推荐）dig +trace www.baidu.com     # 看完整迭代链路（劫持排查神器）nslookup www.baidu.com       # 基础查询host www.baidu.com           # 精简查询# 常见排查点：cat /etc/resolv.conf         # nameserver 配置grep domain /etc/hosts       # hosts 有没有被污染
-
-四、三个真实故障案例案例 1：网站突然打不开，IP 能访问、域名不能排查链路：nslookup 域名 → 超时&#x2F;无记录 → 查 /etc/resolv.conf → 发现 nameserver 写的是内网 DNS → 换 223.5.5.5 立即可解析。
-根因：公司内网 DNS 故障&#x2F;上游被污染。解决：切换 DNS 或同时配置多个 nameserver（nameserver 223.5.5.5 + nameserver 114.114.114.114）。
-案例 2：dig +trace 发现权威服务器返回异常 IP（域名被劫持）现象：解析结果指向一个不明 IP，访问弹广告。
-处理：联系域名服务商核查解析记录；检查是否有 CNAME 被篡改；确认域名管理后台没有被盗号（查登录记录、改强密码）。
-案例 3：CDN 切换后部分地区访问慢现象：CDN 配置已切换，但部分用户还访问旧节点。
-根因：LDNS 缓存了旧 IP，TTL 未到。处理：等 TTL 过期，或通知运营商刷新缓存。
-生产规范：改解析前先看当前 TTL，提前把 TTL 调小（如 300 秒）再改记录，改完再恢复 TTL——避免切换后长时间缓存旧地址。
-五、DNS 排障心法遇到”域名不通”，按这个顺序走：本机 dig 看解析结果 → hosts 有没有污染 → resolv.conf 对不对 → 换公共 DNS 交叉验证 → dig +trace 看链路 → 联系域名服务商。其中”换公共 DNS 交叉验证”能快速区分是”本地 DNS 问题”还是”权威解析问题”，是效率最高的一步。
-]]></content>
-      <categories>
-        <category>网络与安全</category>
-      </categories>
-      <tags>
-        <tag>DNS</tag>
-        <tag>网络</tag>
       </tags>
   </entry>
   <entry>
@@ -390,148 +2629,6 @@ Restart=always 的服务疯狂重启：启动即崩的程序会不停刷日志�
       </tags>
   </entry>
   <entry>
-    <title>NFS 共享存储实战：从挂载到生产读写分离</title>
-    <url>/2023/07/06/nfs%E5%85%B1%E4%BA%AB%E5%AD%98%E5%82%A8%E5%AE%9E%E6%88%98%E4%BB%8E%E6%8C%82%E8%BD%BD%E5%88%B0%E7%94%9F%E4%BA%A7%E8%AF%BB%E5%86%99%E5%88%86%E7%A6%BB/</url>
-    <content><![CDATA[NFS 共享存储实战：从挂载到生产读写分离业务上线后没两天就会遇到一个问题：文件上传功能在多台服务器上各存各的，用户在 A 机传的图片，请求打到 B 机就 404 了。解法是让所有机器挂载同一份存储——NFS 是内网共享存储里最便宜、最常见的选择。这篇把 NFS 从原理到生产读写分离完整过一遍。
-一、先理解 NFS 在干什么NFS（Network File System）让你像用本地目录一样用远程目录。数据真正落在服务端，客户端只做挂载和读写。涉及两个角色：
-
-服务端：共享目录方，监听 2049 端口；NFSv3 还需要 rpcbind（端口映射服务）配合；
-客户端：挂载方，本地挂载点只是一个”门”，读写都打到服务端。
-
-一句话记忆：服务端出目录、客户端进目录，数据永远在服务端那份。
-二、服务端配置（6 步）# 1. 安装（内网按网段放行 2049/rpcbind 即可，不建议直接全关防火墙）yum install -y nfs-utils# 2. 配置共享目录 /etc/exports# 格式：共享路径  客户端地址(权限参数)/data  172.18.1.0/24(rw,sync,no_root_squash)   # 注意客户端地址与参数间没有空格# 3. 创建共享目录并授权mkdir -p /data &amp;&amp; chown -R nfsnobody:nfsnobody /data# 4. 启动并加入开机自启（rpcbind 提供 NFSv3 端口映射，一起启）systemctl start rpcbind &amp;&amp; systemctl start nfssystemctl enable rpcbind nfs# 5. 验证：端口监听 + 实际生效的导出信息ss -tulnp | grep 2049cat /var/lib/nfs/etab        # etab 里有 /data 记录，说明 exports 配置正确exportfs -rv                 # 修改 exports 后平滑加载，无需重启
-
-三、客户端挂载（6 步）# 1. 安装客户端yum install -y nfs-utils# 2. 查看服务端共享了什么showmount -e 172.18.1.31# 3. 挂载mkdir -p /nfsdirmount -t nfs 172.18.1.31:/data /nfsdir# 4. 验证df -h | grep nfsdir# 172.18.1.31:/data  62G  880M  58G  2%  /nfsdir# 5. 写入测试：客户端写，服务端能看到同一份echo &quot;test&quot; &gt; /nfsdir/test.txt &amp;&amp; ls -l /data/# 6. 开机挂载（生产必须加 _netdev，避免网络未就绪时挂载失败卡开机）echo &#x27;172.18.1.31:/data  /nfsdir  nfs  defaults,_netdev 0 0&#x27; &gt;&gt; /etc/fstabmount -a    # 写完 fstab 必须用 mount -a 验证
-
-卸载时提示 device is busy 是高频小坑：先 cd / 再 umount；实在不行 umount -lf 强制卸载。
-四、权限与安全：生产必配的参数NFS 的权限坑集中在身份映射上。服务端默认把客户端 root 映射成 nobody，但普通用户的 uid&#x2F;gid 会原样透传——两边 uid 对不上就会出现”文件能看到但没权限写”。
-统一身份的标准做法：all_squash + anonuid&#x2F;anongid
-# 服务端 exports：/data  172.18.1.0/24(rw,sync,all_squash,anonuid=666,anongid=666)# 服务端创建对应用户并授权useradd -u 666 -g 666 www -s /sbin/nologinchown -R 666.666 /data# 客户端也建同 uid 用户（统一身份，避免权限不足）useradd -u 666 -g 666 www -s /sbin/nologin
-
-这样不管客户端是谁写的，落盘统一变成 uid&#x3D;666，权限问题一次性根治。
-安全挂载参数（静默数据不需要执行权限）：
-mount -t nfs -o noexec,nodev,nosuid 172.18.1.31:/data /nfsdir# noexec：禁止执行（防上传木马被直接运行）# nodev / nosuid：禁设备文件与提权位
-
-性能参数（可选）： noatime,nodiratime 禁止更新访问时间戳，减少 NFS 写放大，高 IO 场景明显。
-五、生产案例：读写分离需求：静态资源读多写少，且不同目录权限隔离——/data/r 只读、/data/w 可写，都映射到 www(666)。
-# 服务端：mkdir -p /data/&#123;r,w&#125;echo &#x27;www:x:666:666::/home/www:/sbin/nologin&#x27; &gt;&gt; /etc/passwd  # 或 useradd -u 666cat &gt;&gt; /etc/exports &lt;&lt;&#x27;EOF&#x27;/data/r  172.18.1.0/24(ro,sync,all_squash,anonuid=666,anongid=666)/data/w  172.18.1.0/24(rw,sync,all_squash,anonuid=666,anongid=666)EOFexportfs -rv# 客户端：mount -t nfs 172.18.1.31:/data/r /data/rmount -t nfs 172.18.1.31:/data/w /data/wtouch /data/r/xx &amp;&amp; echo &quot;Read-only file system&quot;   # 只读目录写入报错（预期）echo ok &gt; /data/w/test                             # 可写目录正常
-
-六、排障要点
-挂载报 access denied：路径写错最常见——showmount -e 服务端 先看服务端实际导出的名字；
-挂载卡住&#x2F;超时：检查 rpcbind 是否启动、2049 与 rpc 端口（111）防火墙是否放行；
-改完 exports 不生效：exportfs -rv 平滑加载，别重启 NFS 中断业务；
-客户端看到文件但没权限：九成是 uid 不一致，按上面统一 anonuid 方案处理。
-
-NFS 本身不复杂，把”数据在服务端、权限靠 anonuid、安全靠 noexec”这三条记住，生产基本够用。它解决的是”共享”，备份和灾备就是下一篇文章的事了。
-]]></content>
-      <categories>
-        <category>计算机运维</category>
-      </categories>
-      <tags>
-        <tag>Linux</tag>
-        <tag>NFS</tag>
-        <tag>存储</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>iptables 防火墙实战：四表五链与 NAT 转发</title>
-    <url>/2023/06/15/iptables%E9%98%B2%E7%81%AB%E5%A2%99%E5%AE%9E%E6%88%98%E5%9B%9B%E8%A1%A8%E4%BA%94%E9%93%BE%E4%B8%8ENAT%E8%BD%AC%E5%8F%91/</url>
-    <content><![CDATA[iptables 防火墙实战：四表五链与 NAT 转发iptables 劝退很多人是因为命令又多又碎。但只要先把”四表五链 + 数据包流向”这个架构想明白，规则就是往架构里填句子。这篇从架构讲起，配合两个真实的 NAT 落地方案。
-一、架构：四表五链 + 数据包流向iptables 是操作内核 netfilter 的用户态工具，不是服务。规则存在内核内存，重启丢失，需手动保存。
-四张表决定”干什么”：
-
-
-
-表
-作用
-挂的链
-
-
-
-filter
-过滤（默认表）：放行&#x2F;丢弃
-INPUT, FORWARD, OUTPUT
-
-
-nat
-地址转换：改 IP&#x2F;端口
-PREROUTING, POSTROUTING, OUTPUT
-
-
-mangle
-改包属性（TTL&#x2F;TOS&#x2F;MARK）
-全部链
-
-
-raw
-绕过连接跟踪（高级优化）
-PREROUTING, OUTPUT
-
-
-五条链决定”什么时候干”：
-
-
-
-链
-触发时机
-
-
-
-PREROUTING
-路由判断前（进门）
-
-
-INPUT
-目的&#x3D;本机，进入进程前
-
-
-FORWARD
-本机转发（当路由器）
-
-
-OUTPUT
-本机进程发出后
-
-
-POSTROUTING
-路由判断后、出网卡前（出门）
-
-
-数据包两条主干路径必须背下来：
-访问本机：入网卡 → PREROUTING → 路由(本机) → INPUT → 进程 → OUTPUT → POSTROUTING → 出站帮人转发：入网卡 → PREROUTING → 路由(转发) → FORWARD → POSTROUTING → 出站
-
-二、常用规则写法# 查看（-v 带计数，-n 不反解域名）iptables -L -v -n# 放行/拒绝iptables -A INPUT -p tcp --dport 22 -j ACCEPTiptables -A INPUT -p tcp --dport 3306 -s 10.0.8.0/24 -j ACCEPT   # 只放行内网网段iptables -A INPUT -p tcp --dport 80 -j DROP# 删除规则：-D 或先 -L --line-numbers 看编号再删iptables -D INPUT -p tcp --dport 80 -j DROP
-
-高频概念：
-
-DROP vs REJECT：DROP 静默丢包（防扫描更安全，但客户端表现是超时）；REJECT 明确拒绝（利于调试，报错快）。对外防火墙用 DROP。
-匹配顺序：链内自上而下，命中即停。具体放行规则放前面，默认策略兜底。
-看命中次数：iptables -L -v -n 的 pkts&#x2F;bytes 列。排障时计数器不增长 &#x3D; 包根本没走到这条规则，往上游找。
-持久化：iptables-save &gt; /etc/sysconfig/iptables，开机 iptables-restore 恢复（或直接装 firewalld 管持久化）。
-
-三、案例 1：SNAT 共享上网场景：内网 20 台服务器走一台网关机器共享上网，网关双网卡（内网 + 公网）。
-# 1. 开启内核转发echo 1 &gt; /proc/sys/net/ipv4/ip_forward# 永久生效：/etc/sysctl.conf 里 net.ipv4.ip_forward=1 后 sysctl -p# 2. 内网过来的流量出公网时把源地址换成网关公网 IPiptables -t nat -A POSTROUTING -s 10.0.8.0/24 -o eth0 -j SNAT --to-source 100.64.8.1# 3. 放行 FORWARDiptables -A FORWARD -s 10.0.8.0/24 -j ACCEPTiptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
-
-四、案例 2：DNAT 端口映射场景：公网访问 100.64.8.1:8080，映射到内网 Web 服务器 10.0.8.11:80。
-# 进网关的流量，目标地址改写为内网服务器iptables -t nat -A PREROUTING -d 100.64.8.1 -p tcp --dport 8080 -j DNAT --to-destination 10.0.8.11:80# 源地址也换成网关（否则内网服务器回包找不到&quot;公网客户端&quot;路由）iptables -t nat -A POSTROUTING -d 10.0.8.11 -p tcp --dport 80 -j SNAT --to-source 100.64.8.1# 放行 FORWARD，验证iptables -A FORWARD -p tcp --dport 80 -j ACCEPTcurl http://100.64.8.1:8080
-
-五、排障要点
-规则看起来对但不生效：先看 iptables -L -v -n 计数器，规则没命中就往上游（PREROUTING&#x2F;路由）排查；本机访问走 INPUT，转发走 FORWARD，别弄错链。
-NAT 后业务不通：八成忘了回程 SNAT，或没开 ip_forward。
-重启后规则全没了：没做 save&#x2F;restore——这句几乎每次踩坑都会被想起。
-
-iptables 上手后，内网隔离、端口映射、共享上网这些场景都能自己搞定，而”包往哪走”的架构感，也是后面学 nftables、云安全组时通用的底层认知。
-]]></content>
-      <categories>
-        <category>网络与安全</category>
-      </categories>
-      <tags>
-        <tag>网络</tag>
-        <tag>iptables</tag>
-        <tag>防火墙</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>TCP 协议实战：握手、挥手与连接排障</title>
     <url>/2023/08/10/tcp%E5%8D%8F%E8%AE%AE%E5%AE%9E%E6%88%98%E6%8F%A1%E6%89%8B%E6%8C%A5%E6%89%8B%E4%B8%8E%E8%BF%9E%E6%8E%A5%E6%8E%92%E9%9A%9C/</url>
     <content><![CDATA[TCP 协议实战：握手、挥手与连接排障TCP 是面试必问、排障必用的核心协议。三次握手为什么是三次？大量 CLOSE_WAIT 怎么办？这篇把原理和排障串成一条线，附抓包实证。
@@ -624,87 +2721,6 @@ TCP 的问题说到底是”连接建不起来（握手）”和”连接关不�
       </tags>
   </entry>
   <entry>
-    <title>文件系统深入：inode、软硬链接与高效查找</title>
-    <url>/2023/05/31/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E6%B7%B1%E5%85%A5inode%E8%BD%AF%E7%A1%AC%E9%93%BE%E6%8E%A5%E4%B8%8E%E9%AB%98%E6%95%88%E6%9F%A5%E6%89%BE/</url>
-    <content><![CDATA[文件系统深入：inode、软硬链接与高效查找文件系统相关的故障往往最反直觉：df -h 明明有空间却写不进去、删了大文件空间却没变、文件名带特殊字符删不掉。这篇从 inode 机制讲起，把这类问题的原理和解决办法收在一起。
-一、inode：文件系统里最被低估的概念文件在磁盘上分两部分：inode（存放元数据：权限、属主、大小、指向数据块的指针）和数据块（真正的内容）。文件名只是 inode 的一个”门牌”。
-ls -i 文件名        # 查看 inode 号stat 文件名         # inode 的完整元数据df -i               # 看 inode 使用率（IUse% 是否 100%）
-
-经典故障：磁盘有空间但写不进去。df -h 还剩 20G，但建文件报 No space left on device——查 df -i，IUse% 100%，全是小文件把 inode 耗尽了。定位小文件最多的目录：
-find /data -type f | cut -d/ -f3 | sort | uniq -c | sort -nr | head -10
-
-清理或归档这些小文件（通常是日志、缓存、临时文件）即可恢复。inode 或磁盘空间任意一个满，磁盘都无法写入。
-二、软链接 vs 硬链接ln 源文件 硬链接      # 硬链接：共享同一个 inodeln -s 源文件 软链接   # 软链接：独立 inode，指向路径
-
-
-
-
-特性
-硬链接
-软链接
-
-
-
-inode
-相同
-不同
-
-
-删除源文件
-链接依然有效
-链接失效（红底白字）
-
-
-跨文件系统
-不可以
-可以
-
-
-目录
-不可以
-可以
-
-
-生产中最常用的其实是软链接三件事：
-
-保持路径不变，解决磁盘不够：数据迁到大盘，软链回原路径，应用无感知；
-代码上线：current -&gt; release-20230510，切换即回滚；
-去软件版本号：/usr/local/mysql -&gt; mysql-5.7.42。
-
-三、find：高段位用法# 基本：名称/类型/深度find ./ -name &quot;*.log&quot; -type ffind ./ -maxdepth 2 -type d# 按大小：+10M 大于 / -10M 小于 / 组合区间find ./ -size +10Mfind ./ -size +10M -a -size -15M# 按修改时间：-mtime +7 七天前改过 / -mmin -60 一小时内find ./ -mtime +7find ./ -mmin -30 -name &quot;*.txt&quot;# 按 inode 找（删特殊文件名的文件）find . -inum 123456 -delete
-
-面试和生产都高频的经典题——删 7 天前的日志：
-find /var/log -type f -mtime +7 -exec rm -f &#123;&#125; \;# 更稳的写法：先 -exec ls -l 复查，确认无误再执行find /var/log -type f -mtime +7 -exec ls -l &#123;&#125; \;
-
-文件名带空格、特殊字符时用 -print0 + xargs -0 安全处理：
-find . -name &quot;*.log&quot; -print0 | xargs -0 rm
-
-四、权限规范：三个”绝不做”
-绝不做 chmod 777：任何场景都不给全权限，最小权限原则是底线（面试问到”为什么不用 777”就答这条）；
-绝不拿 -R 递归改系统目录：chmod -R &#x2F; chown -R 只准作用于业务目录，误改 /etc、/bin 会直接搞崩系统；
-服务文件权限匹配运行用户：nginx 文件归 nginx:nginx、mysql 文件归 mysql:mysql，这是服务能正常读写的前提。
-
-常规权限速查：644 配置文件、755 脚本&#x2F;目录、600 敏感文件、750 业务私密目录。
-chown -R nginx:nginx /usr/local/nginx/html   # 部署后必做：属主属组对齐umask                                          # 默认权限由 022 派生：文件 644、目录 755
-
-五、一次”空间不释放”排查实录现象：删了几个 G 的大日志，df -h 空间一点没变。
-排查：
-
-lsof | grep deleted → 找到被删除但仍被进程持有的文件，确认真凶是正在写日志的 java 进程；
-直接重启进程会导致应用短暂中断（不可取）——生产做法：&gt; /proc/&lt;pid&gt;/fd/&lt;句柄号&gt; 清空句柄指向的内容，空间立即释放，应用无感知；
-事后把”日志按天切割 + logrotate 轮转 + 保留 7 天”写进规范，从根上避免大日志长期占用。
-
-文件系统的坑大多是”原理没吃透 + 操作不规范”叠加出来的，把 inode、链接、权限这三块理解透，排障时基本能一眼定位。
-]]></content>
-      <categories>
-        <category>计算机运维</category>
-      </categories>
-      <tags>
-        <tag>Linux</tag>
-        <tag>文件系统</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>定时备份与实时同步落地：cron + rsync + sersync</title>
     <url>/2023/07/20/%E5%AE%9A%E6%97%B6%E5%A4%87%E4%BB%BD%E4%B8%8E%E5%AE%9E%E6%97%B6%E5%90%8C%E6%AD%A5%E8%90%BD%E5%9C%B0cron%E5%8A%A0rsync%E5%8A%A0sersync/</url>
     <content><![CDATA[定时备份与实时同步落地：cron + rsync + sersync上一篇配好了 rsync 备份通道，但”能传”不等于”可靠”。真正的企业备份要有三件事：定时自动跑、校验完整性、失败要告警。这篇把备份闭环补完，再加一份”实时同步”方案。
@@ -735,51 +2751,9 @@ sysctl -w fs.inotify.max_user_watches=524288
         <category>计算机运维</category>
       </categories>
       <tags>
-        <tag>rsync</tag>
         <tag>备份</tag>
+        <tag>rsync</tag>
         <tag>定时任务</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>日志排查体系：journalctl 与生产日志轮转</title>
-    <url>/2023/04/26/%E6%97%A5%E5%BF%97%E6%8E%92%E6%9F%A5%E4%BD%93%E7%B3%BBjournalctl%E4%B8%8E%E7%94%9F%E4%BA%A7%E6%97%A5%E5%BF%97%E8%BD%AE%E8%BD%AC/</url>
-    <content><![CDATA[日志排查体系：journalctl 与生产日志轮转线上出故障时，第一步永远是翻日志。但日志查得好不好，直接决定定位问题的速度。这篇整理 systemd 生态下 journald &#x2F; journalctl 的完整用法，以及生产环境怎么把日志管住、不爆盘。
-一、journalctl：集中式日志查询systemd 自带 systemd-journald 守护进程，把内核消息、系统服务、自定义服务的输出全部收集进一个二进制数据库（/run/log/journal/ 或持久化后的 /var/log/journal/）。journalctl 就是查询它的工具。
-一句话说清它的定位：”journalctl 是 systemd 生态的日志查询命令，集中管理所有 systemd 单元和内核日志，支持结构化过滤和持久化存储。”
-常用查询# 看某个服务的日志（生产最常用）journalctl -u nginx.servicejournalctl -u nginx -f              # 实时跟踪（类似 tail -f）# 按时间过滤journalctl --since &quot;2023-04-01 10:00:00&quot; --until &quot;2023-04-01 11:00:00&quot;journalctl -u 服务名 --since &quot;1 hour ago&quot;# 本次启动以来的日志（重启后查故障原因必备）journalctl -b                       # 当前启动journalctl -b -1                    # 上一次启动journalctl --list-boots             # 列出所有启动记录# 按优先级过滤journalctl -p err                   # 只看错误及以上# 级别：emerg, alert, crit, err, warning, notice, info, debug# 内核日志 / 指定进程journalctl -kjournalctl _PID=1234
-
-踩过的坑：journald 没持久化有段时间重启服务器后 journalctl -b -1 查不到上次的日志，一度以为是命令写错了。查了一圈才发现：CentOS 7 最小化安装时，journald 的日志默认存在内存里（/run/log/journal），一重启全清空。
-解法是建持久化目录：
-mkdir -p /var/log/journalsystemd-tmpfiles --create --prefix /var/log/journalsystemctl restart systemd-journald# 同时限制日志大小防爆盘（编辑 /etc/systemd/journald.conf）# SystemMaxUse=2G       日志最多占 2G，超了自动删最老的# SystemKeepFree=500M   至少给系统留 500M 空闲# MaxRetentionSec=1month 最多保留 1 个月systemctl restart systemd-journald
-
-二、logrotate：防爆盘的根本journald 只管自己的库，业务日志（nginx、应用自己打的日志）得靠 logrotate 管。配置在 /etc/logrotate.conf（全局）+ /etc/logrotate.d/（每个服务一个文件）。
-以 nginx 为例的标准配置：
-/var/log/nginx/*.log &#123;    daily              # 每天切一次    rotate 7           # 保留 7 份旧的    compress           # 旧日志压缩成 .gz    delaycompress      # 昨天的先不压，方便临时查    missingok          # 文件不存在不报错    notifempty         # 空文件不轮转    sharedscripts    postrotate        [ -f /var/run/nginx.pid ] &amp;&amp; kill -USR1 `cat /var/run/nginx.pid`  # 通知 nginx 重开日志文件    endscript&#125;
-
-两个验证命令先背下来：
-logrotate -d /etc/logrotate.d/nginx   # 调试模式，只演练不真执行，查语法logrotate -f /etc/logrotate.d/nginx   # 强制立刻轮转一次，验证生效
-
-三、配套排查：系统日志文件除了 journald，传统系统日志文件依然是安全排查的一线阵地：
-
-/var/log/messages：系统日志
-/var/log/secure：系统登录和退出日志——如果 secure 里出现大量 Failed，说明有人在暴力破解密码，要立刻加固 SSH
-
-四、一次”查不到日志”的完整复盘现象：应用半夜崩溃，早上重启后想查崩溃时刻的日志，journalctl -b -1 只返回了启动信息，没有应用输出。
-排查链路：
-
-journalctl --list-boots 确认存在上一次启动记录 → 排除命令用错；
-检查 /run/log/journal vs /var/log/journal → 发现只有内存目录，持久化没做；
-补建目录并重启 journald，观察 /var/log/journal 开始落盘；
-后续同类问题都能查到 -b -1 的完整日志。
-
-总结：日志体系的搭建要在上线前完成，而不是故障后才想起来——持久化、轮转、保留策略这三件事，每台新机器初始化时就要一起落下。
-]]></content>
-      <categories>
-        <category>计算机运维</category>
-      </categories>
-      <tags>
-        <tag>Linux</tag>
-        <tag>日志</tag>
       </tags>
   </entry>
   <entry>
@@ -901,44 +2875,126 @@ AI 的角色
       </tags>
   </entry>
   <entry>
-    <title>网络管理与 SSH 安全加固实战</title>
-    <url>/2023/06/08/%E7%BD%91%E7%BB%9C%E7%AE%A1%E7%90%86%E4%B8%8ESSH%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA%E5%AE%9E%E6%88%98/</url>
-    <content><![CDATA[网络管理与 SSH 安全加固实战网络是运维的”水电煤”——不通就什么都干不了，而 SSH 又是唯一的管理通道，它的安全等级直接决定服务器被不被攻破。这篇把网络基础配置和 SSH 加固基线完整过一遍。
-一、网卡与 DNS 配置CentOS 7 系网卡配置在 /etc/sysconfig/network-scripts/ifcfg-eth0：
-TYPE=EthernetBOOTPROTO=none        # 服务器用固定 IP：none/static；笔记本才用 dhcpNAME=eth0DEVICE=eth0ONBOOT=yes            # 开机自动启用IPADDR=10.0.8.11      # 内网固定 IP（本机局域网内唯一）PREFIX=24GATEWAY=10.0.8.1DNS1=223.5.5.5        # 阿里云公共 DNS
+    <title>文件系统深入：inode、软硬链接与高效查找</title>
+    <url>/2023/05/31/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E6%B7%B1%E5%85%A5inode%E8%BD%AF%E7%A1%AC%E9%93%BE%E6%8E%A5%E4%B8%8E%E9%AB%98%E6%95%88%E6%9F%A5%E6%89%BE/</url>
+    <content><![CDATA[文件系统深入：inode、软硬链接与高效查找文件系统相关的故障往往最反直觉：df -h 明明有空间却写不进去、删了大文件空间却没变、文件名带特殊字符删不掉。这篇从 inode 机制讲起，把这类问题的原理和解决办法收在一起。
+一、inode：文件系统里最被低估的概念文件在磁盘上分两部分：inode（存放元数据：权限、属主、大小、指向数据块的指针）和数据块（真正的内容）。文件名只是 inode 的一个”门牌”。
+ls -i 文件名        # 查看 inode 号stat 文件名         # inode 的完整元数据df -i               # 看 inode 使用率（IUse% 是否 100%）
 
-改完必须重启网络服务生效：systemctl restart network。
-DNS 排查三连：
-cat /etc/resolv.conf   # 本机 DNS 配置cat /etc/hosts         # 本机 hosts 解析nslookup / dig 域名     # 实际解析验证
+经典故障：磁盘有空间但写不进去。df -h 还剩 20G，但建文件报 No space left on device——查 df -i，IUse% 100%，全是小文件把 inode 耗尽了。定位小文件最多的目录：
+find /data -type f | cut -d/ -f3 | sort | uniq -c | sort -nr | head -10
 
-生产教训：DNS 配错是”最隐蔽”的网络故障——服务看起来都正常，就是偶发连接超时。排查时先确认 resolv.conf 指向可达的 DNS，再看 hosts 有没有被污染（改 hosts 前先备份）。
-常用公共 DNS 记住即可：223.5.5.5（阿里）、114.114.114.114（电信）、8.8.8.8（谷歌）、202.106.0.20（联通）。
-二、SSH 加固：生产基线装好 openssh-server 后，/etc/ssh/sshd_config 按这个基线配（每项都有明确目的）：
-# 1. 禁止密码登录（生产必须密钥登录）PasswordAuthentication no# 2. 禁止 root 直接登录PermitRootLogin no# 3. 修改端口（默认 22，避开暴力破解的常规扫描）Port 2222# 4. 连接超时（避免无效连接占资源）ClientAliveInterval 60ClientAliveCountMax 3systemctl restart sshd   # 重启前先检查语法：sshd -t
+清理或归档这些小文件（通常是日志、缓存、临时文件）即可恢复。inode 或磁盘空间任意一个满，磁盘都无法写入。
+二、软链接 vs 硬链接ln 源文件 硬链接      # 硬链接：共享同一个 inodeln -s 源文件 软链接   # 软链接：独立 inode，指向路径
 
-改端口前注意：sshd -t 验证配置、确认防火墙放行新端口、保持当前 SSH 会话别断开，三步都做好再重启，否则容易把自己锁在外面（我见过不止一次改配置改到连不上的现场）。
-密钥登录配置流程：
-# 1. 客户端生成密钥：ssh-keygen -t ed25519# 2. 服务端存放公钥（目录 700、文件 600，企业规范）mkdir -p /root/.ssh &amp;&amp; chmod 700 /root/.sshecho &quot;公钥内容&quot; &gt;&gt; /root/.ssh/authorized_keys &amp;&amp; chmod 600 /root/.ssh/authorized_keys# 3. 确认密钥能登录后，再把 PasswordAuthentication 改为 no
 
-三、一次暴力破解防护实录事件：某台云服务器的 /var/log/secure 里出现大量 Failed password for root，来自境外 IP 的扫描在持续撞库。
-应对三步：
 
-立即 PermitRootLogin no + 改 SSH 端口，观察 secure 日志，撞库流量明显下降；
-部署 fail2ban：同一 IP 连续失败 5 次封禁 10 分钟，日志里 Failed 快速归零；
-长期措施：密钥登录全覆盖 + 堡垒机（JumpServer）统一入口，服务器不再直连公网。
 
-四、网络排查命令速查ip addr                 # 查看网卡 IP（ip a）ss -tulnp               # 查看监听端口（替代过时的 netstat）ss -s                   # 连接统计ping / traceroute       # 连通性与路由路径tcpdump -i eth0 port 80 # 抓包定位（网络问题的最终手段）
+特性
+硬链接
+软链接
 
-常用服务端口对照：SSH 22、HTTP 80、HTTPS 443、MySQL 3306、Redis 6379、DNS 53——排查”端口不通”时先分清是防火墙拦了还是服务没监听：ss -tulnp 确认监听，firewall-cmd --list-all（或 iptables）确认放行。
-网络故障排查的核心纪律：先本机后远端、先端口后路由、先防火墙后抓包，一步步缩小范围，不要上来就抓包大海捞针。
+
+
+inode
+相同
+不同
+
+
+删除源文件
+链接依然有效
+链接失效（红底白字）
+
+
+跨文件系统
+不可以
+可以
+
+
+目录
+不可以
+可以
+
+
+生产中最常用的其实是软链接三件事：
+
+保持路径不变，解决磁盘不够：数据迁到大盘，软链回原路径，应用无感知；
+代码上线：current -&gt; release-20230510，切换即回滚；
+去软件版本号：/usr/local/mysql -&gt; mysql-5.7.42。
+
+三、find：高段位用法# 基本：名称/类型/深度find ./ -name &quot;*.log&quot; -type ffind ./ -maxdepth 2 -type d# 按大小：+10M 大于 / -10M 小于 / 组合区间find ./ -size +10Mfind ./ -size +10M -a -size -15M# 按修改时间：-mtime +7 七天前改过 / -mmin -60 一小时内find ./ -mtime +7find ./ -mmin -30 -name &quot;*.txt&quot;# 按 inode 找（删特殊文件名的文件）find . -inum 123456 -delete
+
+面试和生产都高频的经典题——删 7 天前的日志：
+find /var/log -type f -mtime +7 -exec rm -f &#123;&#125; \;# 更稳的写法：先 -exec ls -l 复查，确认无误再执行find /var/log -type f -mtime +7 -exec ls -l &#123;&#125; \;
+
+文件名带空格、特殊字符时用 -print0 + xargs -0 安全处理：
+find . -name &quot;*.log&quot; -print0 | xargs -0 rm
+
+四、权限规范：三个”绝不做”
+绝不做 chmod 777：任何场景都不给全权限，最小权限原则是底线（面试问到”为什么不用 777”就答这条）；
+绝不拿 -R 递归改系统目录：chmod -R &#x2F; chown -R 只准作用于业务目录，误改 /etc、/bin 会直接搞崩系统；
+服务文件权限匹配运行用户：nginx 文件归 nginx:nginx、mysql 文件归 mysql:mysql，这是服务能正常读写的前提。
+
+常规权限速查：644 配置文件、755 脚本&#x2F;目录、600 敏感文件、750 业务私密目录。
+chown -R nginx:nginx /usr/local/nginx/html   # 部署后必做：属主属组对齐umask                                          # 默认权限由 022 派生：文件 644、目录 755
+
+五、一次”空间不释放”排查实录现象：删了几个 G 的大日志，df -h 空间一点没变。
+排查：
+
+lsof | grep deleted → 找到被删除但仍被进程持有的文件，确认真凶是正在写日志的 java 进程；
+直接重启进程会导致应用短暂中断（不可取）——生产做法：&gt; /proc/&lt;pid&gt;/fd/&lt;句柄号&gt; 清空句柄指向的内容，空间立即释放，应用无感知；
+事后把”日志按天切割 + logrotate 轮转 + 保留 7 天”写进规范，从根上避免大日志长期占用。
+
+文件系统的坑大多是”原理没吃透 + 操作不规范”叠加出来的，把 inode、链接、权限这三块理解透，排障时基本能一眼定位。
 ]]></content>
       <categories>
-        <category>网络与安全</category>
+        <category>计算机运维</category>
       </categories>
       <tags>
         <tag>Linux</tag>
-        <tag>网络</tag>
-        <tag>SSH</tag>
+        <tag>文件系统</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>日志排查体系：journalctl 与生产日志轮转</title>
+    <url>/2023/04/26/%E6%97%A5%E5%BF%97%E6%8E%92%E6%9F%A5%E4%BD%93%E7%B3%BBjournalctl%E4%B8%8E%E7%94%9F%E4%BA%A7%E6%97%A5%E5%BF%97%E8%BD%AE%E8%BD%AC/</url>
+    <content><![CDATA[日志排查体系：journalctl 与生产日志轮转线上出故障时，第一步永远是翻日志。但日志查得好不好，直接决定定位问题的速度。这篇整理 systemd 生态下 journald &#x2F; journalctl 的完整用法，以及生产环境怎么把日志管住、不爆盘。
+一、journalctl：集中式日志查询systemd 自带 systemd-journald 守护进程，把内核消息、系统服务、自定义服务的输出全部收集进一个二进制数据库（/run/log/journal/ 或持久化后的 /var/log/journal/）。journalctl 就是查询它的工具。
+一句话说清它的定位：”journalctl 是 systemd 生态的日志查询命令，集中管理所有 systemd 单元和内核日志，支持结构化过滤和持久化存储。”
+常用查询# 看某个服务的日志（生产最常用）journalctl -u nginx.servicejournalctl -u nginx -f              # 实时跟踪（类似 tail -f）# 按时间过滤journalctl --since &quot;2023-04-01 10:00:00&quot; --until &quot;2023-04-01 11:00:00&quot;journalctl -u 服务名 --since &quot;1 hour ago&quot;# 本次启动以来的日志（重启后查故障原因必备）journalctl -b                       # 当前启动journalctl -b -1                    # 上一次启动journalctl --list-boots             # 列出所有启动记录# 按优先级过滤journalctl -p err                   # 只看错误及以上# 级别：emerg, alert, crit, err, warning, notice, info, debug# 内核日志 / 指定进程journalctl -kjournalctl _PID=1234
+
+踩过的坑：journald 没持久化有段时间重启服务器后 journalctl -b -1 查不到上次的日志，一度以为是命令写错了。查了一圈才发现：CentOS 7 最小化安装时，journald 的日志默认存在内存里（/run/log/journal），一重启全清空。
+解法是建持久化目录：
+mkdir -p /var/log/journalsystemd-tmpfiles --create --prefix /var/log/journalsystemctl restart systemd-journald# 同时限制日志大小防爆盘（编辑 /etc/systemd/journald.conf）# SystemMaxUse=2G       日志最多占 2G，超了自动删最老的# SystemKeepFree=500M   至少给系统留 500M 空闲# MaxRetentionSec=1month 最多保留 1 个月systemctl restart systemd-journald
+
+二、logrotate：防爆盘的根本journald 只管自己的库，业务日志（nginx、应用自己打的日志）得靠 logrotate 管。配置在 /etc/logrotate.conf（全局）+ /etc/logrotate.d/（每个服务一个文件）。
+以 nginx 为例的标准配置：
+/var/log/nginx/*.log &#123;    daily              # 每天切一次    rotate 7           # 保留 7 份旧的    compress           # 旧日志压缩成 .gz    delaycompress      # 昨天的先不压，方便临时查    missingok          # 文件不存在不报错    notifempty         # 空文件不轮转    sharedscripts    postrotate        [ -f /var/run/nginx.pid ] &amp;&amp; kill -USR1 `cat /var/run/nginx.pid`  # 通知 nginx 重开日志文件    endscript&#125;
+
+两个验证命令先背下来：
+logrotate -d /etc/logrotate.d/nginx   # 调试模式，只演练不真执行，查语法logrotate -f /etc/logrotate.d/nginx   # 强制立刻轮转一次，验证生效
+
+三、配套排查：系统日志文件除了 journald，传统系统日志文件依然是安全排查的一线阵地：
+
+/var/log/messages：系统日志
+/var/log/secure：系统登录和退出日志——如果 secure 里出现大量 Failed，说明有人在暴力破解密码，要立刻加固 SSH
+
+四、一次”查不到日志”的完整复盘现象：应用半夜崩溃，早上重启后想查崩溃时刻的日志，journalctl -b -1 只返回了启动信息，没有应用输出。
+排查链路：
+
+journalctl --list-boots 确认存在上一次启动记录 → 排除命令用错；
+检查 /run/log/journal vs /var/log/journal → 发现只有内存目录，持久化没做；
+补建目录并重启 journald，观察 /var/log/journal 开始落盘；
+后续同类问题都能查到 -b -1 的完整日志。
+
+总结：日志体系的搭建要在上线前完成，而不是故障后才想起来——持久化、轮转、保留策略这三件事，每台新机器初始化时就要一起落下。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>日志</tag>
+        <tag>Linux</tag>
       </tags>
   </entry>
   <entry>
@@ -1158,143 +3214,6 @@ du -h --max-depth=1 -x / | sort -hr | head -10 定位大头目录（-x 不扫挂
       </tags>
   </entry>
   <entry>
-    <title>HTTP 协议与 Web 服务排障</title>
-    <url>/2023/08/24/http%E5%8D%8F%E8%AE%AE%E4%B8%8Eweb%E6%9C%8D%E5%8A%A1%E6%8E%92%E9%9A%9C/</url>
-    <content><![CDATA[HTTP 协议与 Web 服务排障浏览器报个 502、504，运维的第一反应应该不是”重启”,而是能准确说出这个状态码代表哪一层出了问题。这篇把 HTTP 协议的生产用法整理成一套排障体系。
-一、HTTP 是什么HTTP（超文本传输协议）把超文本文档从 Web 服务器传输到浏览器，应用层协议，基于 TCP 80&#x2F;443。
-URL 组成：协议://主机:端口/路径。三个特点：
-
-请求&#x2F;响应模型：客户端发请求，服务端回响应；
-无状态：HTTP 本身不记录用户状态（靠 Cookie&#x2F;Session 补）；
-基于 TCP：先三次握手，再传 HTTP 报文。
-
-一条命令看全流程（curl -v 是 Web 排障的第一工具）：
-curl -v http://www.example.com/# Trying 1.1.1.1...          ← DNS 解析出的 IP# Connected to ...            ← TCP 连接建立（三次握手）# &gt; GET /index.html HTTP/1.1  ← 发出请求# &lt; HTTP/1.1 200 OK           ← 收到响应
-
-二、请求方法与响应结构GET vs POST：GET 参数在 URL 里（?a=1&amp;b=2），POST 参数在请求体里。POST 更安全——参数不留在日志和地址栏。
-响应报文：状态行（HTTP/1.1 200 OK）+ 头部 + 响应体。
-三、状态码：生产高频场景（面试必问）
-
-
-状态码
-含义
-排障方向
-
-
-
-502 Bad Gateway
-反向代理连不上后端（Tomcat 挂了&#x2F;端口不通&#x2F;连接数满）
-ss -lnt 看后端端口 → tail 后端日志 → curl 后端健康检查
-
-
-504 Gateway Timeout
-连上了后端但响应超时（后端慢&#x2F;排队）
-后端日志、慢查询、线程池满
-
-
-503 Service Unavailable
-服务暂时不可用（重启&#x2F;维护&#x2F;限流）
-看部署状态、限流配置
-
-
-403 Forbidden
-无权限（nginx deny&#x2F;目录权限）
-nginx 配置、文件权限
-
-
-404 Not Found
-资源不存在
-路径写错、静态资源没部署
-
-
-curl -s -o /dev/null -w &quot;%&#123;http_code&#125;&quot; http://localhost/   # 快速看状态码
-
-四、关键头部字段（运维用途）
-
-
-头部
-运维用途
-
-
-
-Server
-curl -I 识别 Web 服务版本（安全审计&#x2F;指纹）
-
-
-Referer
-防盗链判断——图片 403 先看 Referer
-
-
-Host
-决定 Nginx 走哪个 server 块——多站点访问错页面先查 Host
-
-
-User-Agent
-区分爬虫&#x2F;正常用户（封爬虫按 UA）
-
-
-五、重定向 301&#x2F;302&#x2F;304301 永久重定向：域名换了 / HTTP 跳 HTTPS（SEO 权重转移）302 临时重定向：临时跳转（登录后跳回、活动页）304 Not Modified：资源没变直接用缓存（配合 Last-Modified/ETag）
-
-Nginx 配置示例：
-server &#123;    listen 80;    server_name www.example.com;    return 301 https://$host$request_uri;   # HTTP 全站跳 HTTPS&#125;
-
-六、PV &#x2F; UV &#x2F; IP（站长口径）PV（Page View）：页面浏览量，一个人点 2 次算 2 个 PVUV（Unique Visitor）：独立访客（去重 Cookie/设备），只算 1 个IP：独立 IP 数（同一 NAT 出口只算 1 个）
-
-经典计算题：公司大厦 100 人、每人 2 台设备、走同一个 NAT 出口、每人点 2 次 → PV&#x3D;400、UV&#x3D;200、IP&#x3D;1。PV ≥ UV ≥ IP 永远成立；IP 在 NAT 场景只是近似值。
-七、Web 全链路排障（面试讲故障故事用）用户报”网站打不开”，从外层到内层逐层看：
-用户浏览器 → DNS 解析 → 防火墙/安全组 → 负载均衡健康检查 → Nginx 日志(access/error) → Tomcat 日志 → MySQL 慢查询 → 监控图（Zabbix/Prometheus）
-
-入门手段永远是一句话：先 curl 本地确认服务在，再一层层往外查。用户反馈”打开慢”时用浏览器 F12 → Network → Timing 看各段耗时，定位是 DNS 慢、TCP 慢还是 TTFB（服务端处理慢）——比瞎猜快得多。
-HTTP 这一层是 Web 排障的”界面层”：状态码告诉你错在哪一段，头部告诉你细节，curl 帮你复现全过程。配合前面的 TCP 和 DNS 知识，一条链路就完整了。
-]]></content>
-      <categories>
-        <category>网络与安全</category>
-      </categories>
-      <tags>
-        <tag>网络</tag>
-        <tag>HTTP</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>软件包管理避坑指南：Yum / Apt 换源与生产实践</title>
-    <url>/2023/05/10/%E8%BD%AF%E4%BB%B6%E5%8C%85%E7%AE%A1%E7%90%86%E9%81%BF%E5%9D%91%E6%8C%87%E5%8D%97yum%E4%B8%8Eapt%E6%8D%A2%E6%BA%90%E5%AE%9E%E8%B7%B5/</url>
-    <content><![CDATA[软件包管理避坑指南：Yum &#x2F; Apt 换源与生产实践软件管理是所有 Linux 操作的入口，装错了源、乱跑了 update，轻则环境不可用，重则直接干崩生产。这篇把两系包管理的日常操作和生产避坑点整理成一份清单。
-一、先建立两层结构的心智模型不管哪个发行版，软件管理都是两层：
-
-高层工具（自动解决依赖）：RedHat 系 yum/dnf、Debian 系 apt/apt-get——生产中 99% 的场景用它们；
-底层工具（只管单个包）：rpm、dpkg——只在装本地安装包、排查依赖时用。
-
-配置文件位置：RedHat 系在 /etc/yum.repos.d/（每个 .repo 一个源），Debian 系在 /etc/apt/sources.list 和 sources.list.d/。
-二、RedHat 系日常操作# 安装yum install -y nginx              # -y 自动确认（脚本里必须加）yumdownloader --resolve nginx     # 只下载不安装（排查依赖问题用）# 查询yum info nginx                    # 包信息rpm -qa                           # 已安装的所有包rpm -ql nginx                     # 某个包装了哪些文件rpm -qf /usr/sbin/nginx           # 反查：这个文件属于哪个包rpm -qi nginx                     # 包的详细信息# 升级（生产慎用！）yum update --security -y          # 只更新安全补丁（生产推荐）yum update -y                     # 全量更新——可能升级内核导致重启起不来
-
-全量 yum update 是生产大忌。我吃过一次亏：凌晨跑了个全量升级，把内核从 3.10 升到了新版本，第二天重启服务器直接进不去系统，最后靠 grub 手动切回旧内核才救回来。从那以后生产只做 --security 安全更新，大版本升级一律走变更评审 + 灰度环境验证。
-换源（阿里云，CentOS 7 为例）：
-mkdir /etc/yum.repos.d/bakmv /etc/yum.repos.d/CentOS-*.repo /etc/yum.repos.d/bak/curl -o /etc/yum.repos.d/CentOS-Base.repo https://mirrors.aliyun.com/repo/Centos-7.repoyum clean all &amp;&amp; yum makecache
-
-本地 rpm 安装（底层工具）：
-rpm -ivh nginx-1.20.1-1.el7.x86_64.rpm   # 安装本地包（-i 安装 -v 详细 -h 进度条）rpm -Uvh nginx-1.20.1-1.el7.x86_64.rpm   # 升级安装（没装过就装，装过就升）rpm -e nginx                             # 卸载rpm -e --nodeps nginx                    # 强删（极少用，除非确认后果）
-
-三、Debian 系日常操作# 源：deb = 二进制包源（一般用不到 deb-src 源码源）# 组件：main/restricted/universe/multiverse（开源程度不同）apt update                              # 刷新索引（相当于 makecache）apt install -y nginxapt search nginxapt show nginx                          # 包信息apt depends nginx                       # 依赖关系# 升级：只更新已装包（不增删依赖）apt update &amp;&amp; apt upgrade -y# 完整升级：会处理依赖变更，可能删旧包apt full-upgrade -yapt remove nginx                        # 卸载保留配置apt purge nginx                         # 彻底卸载（连 /etc 配置一起删）apt autoremove -y                       # 清理孤立依赖（装完卸完跑一下）
-
-本地 deb 安装与依赖修复：
-dpkg -i nginx_1.18.0-0ubuntu1_amd64.debapt install -f -y                       # 报依赖错误时修复，自动补装缺失依赖dpkg -l nginx                           # 状态标记：ii=已安装, rc=删了但配置残留dpkg -S /usr/sbin/nginx                 # 反查文件属于哪个包
-
-四、两个高频排障场景
-装包报依赖错误：先 yum search/yum deplist（或 apt depends）看依赖闭包，缺什么补什么；本地包优先用高层工具的本地安装参数（yum localinstall），让依赖自动解决。
-rpm -qf 反查没结果：文件可能是手动编译安装的，不在任何 rpm 包内——这类文件升级时要特别注意，卸载重装会丢。
-
-小结包管理的核心纪律就三条：换源用国内镜像、生产只做安全更新、卸载前看清依赖提示。把这三点写进初始化检查清单（见《Linux 发行版选型与系统初始化实践》），基本能避开 90% 的软件管理事故。
-]]></content>
-      <categories>
-        <category>计算机运维</category>
-      </categories>
-      <tags>
-        <tag>Linux</tag>
-        <tag>Yum</tag>
-        <tag>Apt</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>网络基础与 IP 子网规划实战</title>
     <url>/2023/08/03/%E7%BD%91%E7%BB%9C%E5%9F%BA%E7%A1%80%E4%B8%8EIP%E5%AD%90%E7%BD%91%E8%A7%84%E5%88%92%E5%AE%9E%E6%88%98/</url>
     <content><![CDATA[网络基础与 IP 子网规划实战网络是运维一切排障的地基。报障电话里”上不了网””跨网段不通”的根因，80% 落在 IP 规划、掩码、网关这三件事上。这篇把网络基础与 IP 子网规划完整过一遍。
@@ -1345,6 +3264,86 @@ CIDR：无类域间路由——/n 记法的来源，IP 段合并表达（如 10.
         <tag>Linux</tag>
         <tag>网络基础</tag>
         <tag>IP</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>网络管理与 SSH 安全加固实战</title>
+    <url>/2023/06/08/%E7%BD%91%E7%BB%9C%E7%AE%A1%E7%90%86%E4%B8%8ESSH%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA%E5%AE%9E%E6%88%98/</url>
+    <content><![CDATA[网络管理与 SSH 安全加固实战网络是运维的”水电煤”——不通就什么都干不了，而 SSH 又是唯一的管理通道，它的安全等级直接决定服务器被不被攻破。这篇把网络基础配置和 SSH 加固基线完整过一遍。
+一、网卡与 DNS 配置CentOS 7 系网卡配置在 /etc/sysconfig/network-scripts/ifcfg-eth0：
+TYPE=EthernetBOOTPROTO=none        # 服务器用固定 IP：none/static；笔记本才用 dhcpNAME=eth0DEVICE=eth0ONBOOT=yes            # 开机自动启用IPADDR=10.0.8.11      # 内网固定 IP（本机局域网内唯一）PREFIX=24GATEWAY=10.0.8.1DNS1=223.5.5.5        # 阿里云公共 DNS
+
+改完必须重启网络服务生效：systemctl restart network。
+DNS 排查三连：
+cat /etc/resolv.conf   # 本机 DNS 配置cat /etc/hosts         # 本机 hosts 解析nslookup / dig 域名     # 实际解析验证
+
+生产教训：DNS 配错是”最隐蔽”的网络故障——服务看起来都正常，就是偶发连接超时。排查时先确认 resolv.conf 指向可达的 DNS，再看 hosts 有没有被污染（改 hosts 前先备份）。
+常用公共 DNS 记住即可：223.5.5.5（阿里）、114.114.114.114（电信）、8.8.8.8（谷歌）、202.106.0.20（联通）。
+二、SSH 加固：生产基线装好 openssh-server 后，/etc/ssh/sshd_config 按这个基线配（每项都有明确目的）：
+# 1. 禁止密码登录（生产必须密钥登录）PasswordAuthentication no# 2. 禁止 root 直接登录PermitRootLogin no# 3. 修改端口（默认 22，避开暴力破解的常规扫描）Port 2222# 4. 连接超时（避免无效连接占资源）ClientAliveInterval 60ClientAliveCountMax 3systemctl restart sshd   # 重启前先检查语法：sshd -t
+
+改端口前注意：sshd -t 验证配置、确认防火墙放行新端口、保持当前 SSH 会话别断开，三步都做好再重启，否则容易把自己锁在外面（我见过不止一次改配置改到连不上的现场）。
+密钥登录配置流程：
+# 1. 客户端生成密钥：ssh-keygen -t ed25519# 2. 服务端存放公钥（目录 700、文件 600，企业规范）mkdir -p /root/.ssh &amp;&amp; chmod 700 /root/.sshecho &quot;公钥内容&quot; &gt;&gt; /root/.ssh/authorized_keys &amp;&amp; chmod 600 /root/.ssh/authorized_keys# 3. 确认密钥能登录后，再把 PasswordAuthentication 改为 no
+
+三、一次暴力破解防护实录事件：某台云服务器的 /var/log/secure 里出现大量 Failed password for root，来自境外 IP 的扫描在持续撞库。
+应对三步：
+
+立即 PermitRootLogin no + 改 SSH 端口，观察 secure 日志，撞库流量明显下降；
+部署 fail2ban：同一 IP 连续失败 5 次封禁 10 分钟，日志里 Failed 快速归零；
+长期措施：密钥登录全覆盖 + 堡垒机（JumpServer）统一入口，服务器不再直连公网。
+
+四、网络排查命令速查ip addr                 # 查看网卡 IP（ip a）ss -tulnp               # 查看监听端口（替代过时的 netstat）ss -s                   # 连接统计ping / traceroute       # 连通性与路由路径tcpdump -i eth0 port 80 # 抓包定位（网络问题的最终手段）
+
+常用服务端口对照：SSH 22、HTTP 80、HTTPS 443、MySQL 3306、Redis 6379、DNS 53——排查”端口不通”时先分清是防火墙拦了还是服务没监听：ss -tulnp 确认监听，firewall-cmd --list-all（或 iptables）确认放行。
+网络故障排查的核心纪律：先本机后远端、先端口后路由、先防火墙后抓包，一步步缩小范围，不要上来就抓包大海捞针。
+]]></content>
+      <categories>
+        <category>网络与安全</category>
+      </categories>
+      <tags>
+        <tag>SSH</tag>
+        <tag>网络</tag>
+        <tag>Linux</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>软件包管理避坑指南：Yum / Apt 换源与生产实践</title>
+    <url>/2023/05/10/%E8%BD%AF%E4%BB%B6%E5%8C%85%E7%AE%A1%E7%90%86%E9%81%BF%E5%9D%91%E6%8C%87%E5%8D%97yum%E4%B8%8Eapt%E6%8D%A2%E6%BA%90%E5%AE%9E%E8%B7%B5/</url>
+    <content><![CDATA[软件包管理避坑指南：Yum &#x2F; Apt 换源与生产实践软件管理是所有 Linux 操作的入口，装错了源、乱跑了 update，轻则环境不可用，重则直接干崩生产。这篇把两系包管理的日常操作和生产避坑点整理成一份清单。
+一、先建立两层结构的心智模型不管哪个发行版，软件管理都是两层：
+
+高层工具（自动解决依赖）：RedHat 系 yum/dnf、Debian 系 apt/apt-get——生产中 99% 的场景用它们；
+底层工具（只管单个包）：rpm、dpkg——只在装本地安装包、排查依赖时用。
+
+配置文件位置：RedHat 系在 /etc/yum.repos.d/（每个 .repo 一个源），Debian 系在 /etc/apt/sources.list 和 sources.list.d/。
+二、RedHat 系日常操作# 安装yum install -y nginx              # -y 自动确认（脚本里必须加）yumdownloader --resolve nginx     # 只下载不安装（排查依赖问题用）# 查询yum info nginx                    # 包信息rpm -qa                           # 已安装的所有包rpm -ql nginx                     # 某个包装了哪些文件rpm -qf /usr/sbin/nginx           # 反查：这个文件属于哪个包rpm -qi nginx                     # 包的详细信息# 升级（生产慎用！）yum update --security -y          # 只更新安全补丁（生产推荐）yum update -y                     # 全量更新——可能升级内核导致重启起不来
+
+全量 yum update 是生产大忌。我吃过一次亏：凌晨跑了个全量升级，把内核从 3.10 升到了新版本，第二天重启服务器直接进不去系统，最后靠 grub 手动切回旧内核才救回来。从那以后生产只做 --security 安全更新，大版本升级一律走变更评审 + 灰度环境验证。
+换源（阿里云，CentOS 7 为例）：
+mkdir /etc/yum.repos.d/bakmv /etc/yum.repos.d/CentOS-*.repo /etc/yum.repos.d/bak/curl -o /etc/yum.repos.d/CentOS-Base.repo https://mirrors.aliyun.com/repo/Centos-7.repoyum clean all &amp;&amp; yum makecache
+
+本地 rpm 安装（底层工具）：
+rpm -ivh nginx-1.20.1-1.el7.x86_64.rpm   # 安装本地包（-i 安装 -v 详细 -h 进度条）rpm -Uvh nginx-1.20.1-1.el7.x86_64.rpm   # 升级安装（没装过就装，装过就升）rpm -e nginx                             # 卸载rpm -e --nodeps nginx                    # 强删（极少用，除非确认后果）
+
+三、Debian 系日常操作# 源：deb = 二进制包源（一般用不到 deb-src 源码源）# 组件：main/restricted/universe/multiverse（开源程度不同）apt update                              # 刷新索引（相当于 makecache）apt install -y nginxapt search nginxapt show nginx                          # 包信息apt depends nginx                       # 依赖关系# 升级：只更新已装包（不增删依赖）apt update &amp;&amp; apt upgrade -y# 完整升级：会处理依赖变更，可能删旧包apt full-upgrade -yapt remove nginx                        # 卸载保留配置apt purge nginx                         # 彻底卸载（连 /etc 配置一起删）apt autoremove -y                       # 清理孤立依赖（装完卸完跑一下）
+
+本地 deb 安装与依赖修复：
+dpkg -i nginx_1.18.0-0ubuntu1_amd64.debapt install -f -y                       # 报依赖错误时修复，自动补装缺失依赖dpkg -l nginx                           # 状态标记：ii=已安装, rc=删了但配置残留dpkg -S /usr/sbin/nginx                 # 反查文件属于哪个包
+
+四、两个高频排障场景
+装包报依赖错误：先 yum search/yum deplist（或 apt depends）看依赖闭包，缺什么补什么；本地包优先用高层工具的本地安装参数（yum localinstall），让依赖自动解决。
+rpm -qf 反查没结果：文件可能是手动编译安装的，不在任何 rpm 包内——这类文件升级时要特别注意，卸载重装会丢。
+
+小结包管理的核心纪律就三条：换源用国内镜像、生产只做安全更新、卸载前看清依赖提示。把这三点写进初始化检查清单（见《Linux 发行版选型与系统初始化实践》），基本能避开 90% 的软件管理事故。
+]]></content>
+      <categories>
+        <category>计算机运维</category>
+      </categories>
+      <tags>
+        <tag>Linux</tag>
+        <tag>Yum</tag>
+        <tag>Apt</tag>
       </tags>
   </entry>
   <entry>

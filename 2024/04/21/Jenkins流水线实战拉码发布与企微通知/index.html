@@ -1,0 +1,315 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>Jenkins 流水线实战：拉码、构建、发布与企微通知 | LuminDream's Blogs</title><meta name="author" content="LuminDream"><meta name="copyright" content="LuminDream"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="一条从 GitLab 到 WEB 服务器的完整交付链路：Jenkins 拉码、脚本打包分发、软链切换与回滚、webhook 自动触发、SonarQube 质量门禁和企业微信通知。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Jenkins 流水线实战：拉码、构建、发布与企微通知">
+<meta property="og:url" content="https://www.lumindream.site/2024/04/21/Jenkins%E6%B5%81%E6%B0%B4%E7%BA%BF%E5%AE%9E%E6%88%98%E6%8B%89%E7%A0%81%E5%8F%91%E5%B8%83%E4%B8%8E%E4%BC%81%E5%BE%AE%E9%80%9A%E7%9F%A5/">
+<meta property="og:site_name" content="LuminDream&#39;s Blogs">
+<meta property="og:description" content="一条从 GitLab 到 WEB 服务器的完整交付链路：Jenkins 拉码、脚本打包分发、软链切换与回滚、webhook 自动触发、SonarQube 质量门禁和企业微信通知。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://www.lumindream.site/images/pic_touxiang.png">
+<meta property="article:published_time" content="2024-04-21T02:00:00.000Z">
+<meta property="article:modified_time" content="2024-04-21T02:00:00.000Z">
+<meta property="article:author" content="LuminDream">
+<meta property="article:tag" content="CI&#x2F;CD">
+<meta property="article:tag" content="Jenkins">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://www.lumindream.site/images/pic_touxiang.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Jenkins 流水线实战：拉码、构建、发布与企微通知",
+  "url": "https://www.lumindream.site/2024/04/21/Jenkins%E6%B5%81%E6%B0%B4%E7%BA%BF%E5%AE%9E%E6%88%98%E6%8B%89%E7%A0%81%E5%8F%91%E5%B8%83%E4%B8%8E%E4%BC%81%E5%BE%AE%E9%80%9A%E7%9F%A5/",
+  "image": "https://www.lumindream.site/images/pic_touxiang.png",
+  "datePublished": "2024-04-21T02:00:00.000Z",
+  "dateModified": "2024-04-21T02:00:00.000Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "LuminDream",
+      "url": "https://www.lumindream.site"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/images/pic_blogweb.png"><link rel="canonical" href="https://www.lumindream.site/2024/04/21/Jenkins%E6%B5%81%E6%B0%B4%E7%BA%BF%E5%AE%9E%E6%88%98%E6%8B%89%E7%A0%81%E5%8F%91%E5%B8%83%E4%B8%8E%E4%BC%81%E5%BE%AE%E9%80%9A%E7%9F%A5/"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><meta name="google-site-verification" content="google6fbb5e4d2b11068f"/><meta name="baidu-site-verification" content="codeva-Wf0ZuoEmLd"/><link rel="stylesheet" href="/css/index.css?v=5.6.2"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.14/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d1f17')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          const mediaQueryDark = window.matchMedia('(prefers-color-scheme: dark)')
+          const mediaQueryLight = window.matchMedia('(prefers-color-scheme: light)')
+
+          if (theme === undefined) {
+            if (mediaQueryLight.matches) activateLightMode()
+            else if (mediaQueryDark.matches) activateDarkMode()
+            else {
+              const hour = new Date().getHours()
+              const start = 6
+              const end = 18
+              const isNight =
+                start < end
+                    ? hour < start || hour >= end
+                    : hour >= start || hour < end
+              isNight ? activateDarkMode() : activateLightMode()
+            }
+            mediaQueryDark.addEventListener('change', e => {
+              if (saveToLocal.get('theme') === undefined) {
+                e.matches ? activateDarkMode() : activateLightMode()
+              }
+            })
+          } else {
+            theme === 'light' ? activateLightMode() : activateDarkMode()
+          }
+        
+      
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":true,"top_n_per_article":-1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: true,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: true
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'Jenkins 流水线实战：拉码、构建、发布与企微通知',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/about-custom.css"><link rel="stylesheet" href="/css/theme-skin.css?v=5"><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="LuminDream's Blogs" type="application/atom+xml">
+</head><body><div class="bg-animation" id="web_bg"></div><script>(() => {
+  const arr = ["background-image: url(/images/pic_bg1.png);","background-image: url(/images/pic_bg2.png);","background-image: url(/images/pic_bg3.png);"]
+  const webBgDiv = document.getElementById('web_bg')
+
+  const setRandomBg = () => {
+    webBgDiv.style = arr[Math.floor(Math.random() * arr.length)]
+    requestAnimationFrame(() => webBgDiv.classList.add('bg-animation'))
+  }
+
+  document.addEventListener('pjax:send', () => {
+    webBgDiv.style = ''
+    webBgDiv.classList.remove('bg-animation')
+  })
+
+  document.addEventListener('pjax:complete', setRandomBg)
+  document.addEventListener('DOMContentLoaded', setRandomBg)
+})()
+</script><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/images/pic_touxiang.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/ loading='lazy'></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">39</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">49</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">4</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group hide"><i class="fa-fw fas fa-book"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/projects/"><i class="fa-fw fas fa-code"></i><span> 项目</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-heart"></i><span> 生活</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/essay/"><i class="fa-fw fas fa-pen-fancy"></i><span> 随笔</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="not-top-img fixed" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><img class="site-icon" src="/images/pic_blogweb.png" alt="Logo" loading='lazy'><span class="site-name">LuminDream's Blogs</span></a><a class="nav-page-title" href="/"><span class="site-name">Jenkins 流水线实战：拉码、构建、发布与企微通知</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group hide"><i class="fa-fw fas fa-book"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/projects/"><i class="fa-fw fas fa-code"></i><span> 项目</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-heart"></i><span> 生活</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/essay/"><i class="fa-fw fas fa-pen-fancy"></i><span> 随笔</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav></header><main class="layout" id="content-inner"><div id="post"><div id="post-info"><h1 class="post-title">Jenkins 流水线实战：拉码、构建、发布与企微通知</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="fa-fw post-meta-icon far fa-calendar-alt"></i><span class="post-meta-label">发表于</span><time datetime="2024-04-21T02:00:00.000Z" title="发表于 2024-04-21 10:00:00">2024-04-21</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E8%BF%90%E7%BB%B4/">计算机运维</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">1.8k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>6分钟</span></span></div></div></div><article class="container post-content" id="article-container"><h1 id="Jenkins-流水线实战：拉码、构建、发布与企微通知"><a href="#Jenkins-流水线实战：拉码、构建、发布与企微通知" class="headerlink" title="Jenkins 流水线实战：拉码、构建、发布与企微通知"></a>Jenkins 流水线实战：拉码、构建、发布与企微通知</h1><p>Jenkins 装好、SonarQube 能扫之后，我把整条链路串了一遍：开发推代码到 GitLab，Jenkins 自动拉取、扫描、打包，分发到 WEB 服务器完成切换，最后往企业微信群里发一条通知。这篇文章把这套流程的每一段拆开讲清楚，包括那个”软链切换”的发布方案——它是整条链路里最值得抄走的设计。</p>
+<h2 id="一、先看整条链路的全貌"><a href="#一、先看整条链路的全貌" class="headerlink" title="一、先看整条链路的全貌"></a>一、先看整条链路的全貌</h2><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">开发 push 代码</span><br><span class="line">   │</span><br><span class="line">   ▼</span><br><span class="line">GitLab 仓库 ── webhook 触发 ──► Jenkins</span><br><span class="line">                                  │  1. 拉取代码（SSH 密钥）</span><br><span class="line">                                  │  2. SonarQube 代码扫描</span><br><span class="line">                                  │  3. 打包 tar.gz</span><br><span class="line">                                  ▼</span><br><span class="line">                             scp 分发到 WEB 服务器</span><br><span class="line">                                  │  4. 解压到按时间命名的目录</span><br><span class="line">                                  │  5. 软链 html → 新版本目录（秒级切换）</span><br><span class="line">                                  ▼</span><br><span class="line">                             企业微信通知构建结果</span><br></pre></td></tr></table></figure>
+
+<p>技术含量不在”自动化”三个字，而在几个细节：发布目录按时间命名可追溯、软链切换可秒回滚、扫描和通知都挂在同一条流水线上。</p>
+<h2 id="二、让-Jenkins-能拉到-GitLab-的代码"><a href="#二、让-Jenkins-能拉到-GitLab-的代码" class="headerlink" title="二、让 Jenkins 能拉到 GitLab 的代码"></a>二、让 Jenkins 能拉到 GitLab 的代码</h2><p>先在 GitLab 建好仓库、把代码推上去，然后回 Jenkins 操作：</p>
+<ol>
+<li>新建自由风格项目，源码管理选 Git，填仓库地址（<code>git@10.0.8.200:ops/game.git</code>）；</li>
+<li>Jenkins 服务器生成密钥对，公钥贴到 GitLab 的 SSH Keys 页面：</li>
+</ol>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ssh-keygen -t rsa -b 2048      <span class="comment"># 一路回车</span></span><br><span class="line"><span class="built_in">cat</span> ~/.ssh/id_rsa.pub          <span class="comment"># 复制内容贴到 GitLab</span></span><br></pre></td></tr></table></figure>
+
+<ol start="3">
+<li>第一次手动克隆一次，回答 yes 把主机指纹写进 known_hosts——<strong>这步不能省</strong>，否则 Jenkins 里构建时卡在指纹确认上：</li>
+</ol>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">git <span class="built_in">clone</span> git@10.0.8.200:ops/game.git /tmp/test_clone   <span class="comment"># 输入一次 yes</span></span><br></pre></td></tr></table></figure>
+
+<ol start="4">
+<li>回项目页面点”立即构建”，构建成功后验证工作目录：</li>
+</ol>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">ls</span> /var/lib/jenkins/workspace/game_job/</span><br><span class="line"><span class="comment"># 能看到仓库里的代码文件，说明拉取链路通了</span></span><br></pre></td></tr></table></figure>
+
+<p>如果项目配置页还在报错，保存退出再重新进一次——页面缓存引起的误报，遇到过两次。</p>
+<h2 id="三、把代码发布到-WEB-服务器"><a href="#三、把代码发布到-WEB-服务器" class="headerlink" title="三、把代码发布到 WEB 服务器"></a>三、把代码发布到 WEB 服务器</h2><p>WEB 侧先准备好：装 Nginx，站点目录指向 <code>/code/html</code>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># web01 上的 Nginx 站点配置</span></span><br><span class="line">server &#123;</span><br><span class="line">    listen    80;</span><br><span class="line">    server_name localhost;</span><br><span class="line">    location / &#123;</span><br><span class="line">        root  /code/html;</span><br><span class="line">        index index.html index.htm;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然后做 Jenkins 到 WEB 的免密，再写构建脚本：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ssh-copy-id -i ~/.ssh/id_rsa.pub 10.0.8.7</span><br></pre></td></tr></table></figure>
+
+<p>构建时执行的 Shell，核心是”打包 → 分发 → 解压 → 换软链”四步：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">DATE=$(<span class="built_in">date</span> +%Y-%m-%d-%H-%M-%S)</span><br><span class="line">CODE_DIR=<span class="string">&quot;./&quot;</span></span><br><span class="line">WEB_DIR=<span class="string">&quot;/code&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="title">get_code_tar</span></span>()&#123;</span><br><span class="line">    <span class="built_in">cd</span> <span class="variable">$CODE_DIR</span> &amp;&amp; tar zcf /opt/web-<span class="variable">$DATE</span>.tar.gz ./*</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="title">scp_code_web</span></span>()&#123;</span><br><span class="line">    scp /opt/web-<span class="variable">$DATE</span>.tar.gz 10.0.8.7:<span class="variable">$WEB_DIR</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="title">code_tarxf</span></span>()&#123;</span><br><span class="line">    ssh 10.0.8.7 <span class="string">&quot;cd <span class="variable">$WEB_DIR</span> &amp;&amp; mkdir web-<span class="variable">$DATE</span> &amp;&amp; tar xf web-<span class="variable">$DATE</span>.tar.gz -C web-<span class="variable">$DATE</span>&quot;</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="title">ln_html</span></span>()&#123;</span><br><span class="line">    ssh 10.0.8.7 <span class="string">&quot;cd <span class="variable">$WEB_DIR</span> &amp;&amp; rm -rf html &amp;&amp; ln -s web-<span class="variable">$DATE</span> html&quot;</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="title">main</span></span>()&#123;</span><br><span class="line">    get_code_tar</span><br><span class="line">    scp_code_web</span><br><span class="line">    code_tarxf</span><br><span class="line">    ln_html</span><br><span class="line">&#125;</span><br><span class="line">main</span><br></pre></td></tr></table></figure>
+
+<p>这个方案的精妙之处在最后一步：<strong>Nginx 始终读 <code>html</code> 这个软链，切换版本只是改指向</strong>。</p>
+<ul>
+<li>发布：新版本解压到 <code>web-2024-04-21-10-30-00</code> 目录，软链指过去；</li>
+<li>回滚：软链指回上一个目录，一条命令，秒级完成；</li>
+<li>追溯：每个时间戳目录就是一次发布记录，磁盘写不下旧的直接删。</li>
+</ul>
+<p>比起”覆盖式”发布（直接往站点目录里覆盖文件），这套方案发布和回滚都是原子操作，不会出现”一半新一半旧”的中间状态。我后来把这套模式复制到了所有静态站点的发布上。</p>
+<h2 id="四、webhook：让一切自动发生"><a href="#四、webhook：让一切自动发生" class="headerlink" title="四、webhook：让一切自动发生"></a>四、webhook：让一切自动发生</h2><p>前面还要手动点”立即构建”，webhook 把它也省了：</p>
+<ol>
+<li>Jenkins 项目里勾选触发器，生成一个 Token 并保存；</li>
+<li>到 GitLab 项目的 Webhooks 设置里，填 Jenkins 地址 <code>http://10.0.8.201:8082/job/game_job/build?token=&lt;你的Token&gt;</code>；</li>
+<li>测试：改一行代码推送到 GitLab，观察 Jenkins 自动开始构建。</li>
+</ol>
+<p>验证方法很直接：推代码后去 Jenkins 看构建历史里有没有新的构建记录，有就通了。没通的话先查 GitLab 的网络出口能不能访问到 Jenkins（内网防火墙很常见）。</p>
+<h2 id="五、质量门禁：集成-SonarQube"><a href="#五、质量门禁：集成-SonarQube" class="headerlink" title="五、质量门禁：集成 SonarQube"></a>五、质量门禁：集成 SonarQube</h2><p>装好扫描器之后，把它挂进项目构建步骤：</p>
+<ol>
+<li><strong>系统管理 → 系统设置 → SonarQube Server</strong>：填名称、URL <code>http://10.0.8.203:9000</code>、认证 Token（存成 Secret text 类型）；</li>
+<li><strong>全局工具配置</strong>：填 sonar-scanner 的安装目录，让 Jenkins 找得到命令；</li>
+<li>项目构建步骤里加”Execute SonarQube Scanner”，指定 projectKey 和扫描目录。</li>
+</ol>
+<p>有一个顺序问题必须注意：<strong>扫描步骤要放在打包 Shell 的前面</strong>。扫描失败（质量不达标）就不该打包分发——这个顺序错了，门禁就形同虚设，代码照样上线。</p>
+<h2 id="六、构建结果通知：企业微信"><a href="#六、构建结果通知：企业微信" class="headerlink" title="六、构建结果通知：企业微信"></a>六、构建结果通知：企业微信</h2><p>构建完了得让人知道结果，我们用的是企业微信应用消息：</p>
+<ol>
+<li>注册企业微信，创建应用，拿到 AgentId 和 Secret，填入通知脚本；</li>
+<li>通知脚本放到 Jenkins 服务器上（如 <code>/server/scripts/jenkins_notify.py</code>），依赖 requests 库；</li>
+<li>本地先单独测一次脚本，确认能发出消息：</li>
+</ol>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">pip install requests</span><br><span class="line">python jenkins_notify.py &lt;构建URL&gt; /tmp/changelog.log &lt;项目名&gt;</span><br></pre></td></tr></table></figure>
+
+<ol start="4">
+<li>Jenkins 侧安装通知插件，在项目里配置构建后步骤：</li>
+</ol>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> <span class="string">&quot;==========Start Notify==============&quot;</span></span><br><span class="line"><span class="built_in">echo</span> <span class="variable">$&#123;SCM_CHANGELOG&#125;</span> &gt; /tmp/<span class="variable">$&#123;JOB_NAME&#125;</span>_change.<span class="built_in">log</span></span><br><span class="line">python /server/scripts/jenkins_notify.py <span class="variable">$&#123;BUILD_URL&#125;</span> /tmp/<span class="variable">$&#123;JOB_NAME&#125;</span>_change.<span class="built_in">log</span> <span class="variable">$&#123;JOB_NAME&#125;</span></span><br><span class="line"><span class="built_in">rm</span> -fv /tmp/<span class="variable">$&#123;JOB_NAME&#125;</span>_change.<span class="built_in">log</span></span><br></pre></td></tr></table></figure>
+
+<p>插件配置里 <code>Entry Format</code> 填 <code>%3$s(at %4$s via %1$s)</code>（提交信息、时间、提交人），<code>Date Format</code> 填 <code>yyyy-MM-dd HH:mm:ss</code>，通知里就能带上”谁、什么时候、改了什么”。</p>
+<h2 id="七、从自由风格到-Pipeline，再到版本发布"><a href="#七、从自由风格到-Pipeline，再到版本发布" class="headerlink" title="七、从自由风格到 Pipeline，再到版本发布"></a>七、从自由风格到 Pipeline，再到版本发布</h2><p>自由风格项目图形化配置，上手快，但流程一多就乱——构建步骤散在页面里，没法版本化，换台机器就要重新点一遍。<strong>Pipeline 的价值就是把流程写成代码</strong>，放进仓库跟代码一起管理：</p>
+<figure class="highlight groovy"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">pipeline &#123;</span><br><span class="line">    agent any</span><br><span class="line">    stages &#123;</span><br><span class="line">        stage(<span class="string">&#x27;拉取代码&#x27;</span>) &#123;</span><br><span class="line">            steps &#123; checkout scm &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        stage(<span class="string">&#x27;代码扫描&#x27;</span>) &#123;</span><br><span class="line">            steps &#123;</span><br><span class="line">                sh <span class="string">&#x27;sonar-scanner -Dsonar.projectKey=game -Dsonar.sources=.&#x27;</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        stage(<span class="string">&#x27;打包分发&#x27;</span>) &#123;</span><br><span class="line">            steps &#123; sh <span class="string">&#x27;bash /opt/scripts/deploy.sh&#x27;</span> &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    post &#123;</span><br><span class="line">        success &#123; echo <span class="string">&#x27;通知企业微信：构建成功&#x27;</span> &#125;</span><br><span class="line">        failure &#123; echo <span class="string">&#x27;通知企业微信：构建失败&#x27;</span> &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>最后是版本发布环节。稳定版本打 tag，Jenkins 通过 Git Parameter 插件按标签拉取指定版本：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 开发侧：给稳定版本打标签并推送</span></span><br><span class="line">git tag -a v1.0.1 -m <span class="string">&quot;v1.0.1&quot;</span></span><br><span class="line">git push origin v1.0.1</span><br></pre></td></tr></table></figure>
+
+<p>Jenkins 项目里装 Git Parameter 插件，构建时把”参数化构建”的变量换成 Git Parameter，类型选 Tag——之后每次构建都可以从版本列表里选一个 tag 拉取。发布、测试、回滚都能按版本精确操作，不再靠”最新代码碰运气”。</p>
+<h2 id="一点复盘"><a href="#一点复盘" class="headerlink" title="一点复盘"></a>一点复盘</h2><p>这套链路跑顺之后，发版从”我手动折腾十分钟”变成”开发推代码、两分钟后群里收到通知”。回看整个过程，最值钱的其实是三样东西：<strong>软链切换的发布方案、扫描前置的门禁顺序、tag + 参数化的版本管理</strong>。工具会换，这三个做法在哪套 CI 里都用得上。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://www.lumindream.site">LuminDream</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://www.lumindream.site/2024/04/21/Jenkins%E6%B5%81%E6%B0%B4%E7%BA%BF%E5%AE%9E%E6%88%98%E6%8B%89%E7%A0%81%E5%8F%91%E5%B8%83%E4%B8%8E%E4%BC%81%E5%BE%AE%E9%80%9A%E7%9F%A5/">https://www.lumindream.site/2024/04/21/Jenkins%E6%B5%81%E6%B0%B4%E7%BA%BF%E5%AE%9E%E6%88%98%E6%8B%89%E7%A0%81%E5%8F%91%E5%B8%83%E4%B8%8E%E4%BC%81%E5%BE%AE%E9%80%9A%E7%9F%A5/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://www.lumindream.site" target="_blank">LuminDream's Blogs</a>！</span></div></div><div class="tag_share"></div><div class="post-reward"><div class="reward-button"><i class="fas fa-qrcode"></i>赞助</div><div class="reward-main"><ul class="reward-all"><li class="reward-item"><a href="/images/wx.png" target="_blank"><img class="post-qr-code-img" src="/images/wx.png" alt="微信"/ loading='lazy'></a><div class="post-qr-code-desc">微信</div></li><li class="reward-item"><a href="/images/zfb.jpg" target="_blank"><img class="post-qr-code-img" src="/images/zfb.jpg" alt="支付宝"/ loading='lazy'></a><div class="post-qr-code-desc">支付宝</div></li></ul></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2024/04/03/Jenkins%E9%83%A8%E7%BD%B2%E4%B8%8ESonarQube%E4%BB%A3%E7%A0%81%E8%B4%A8%E9%87%8F%E5%B9%B3%E5%8F%B0/" title="Jenkins 部署与 SonarQube 代码质量平台搭建"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">Jenkins 部署与 SonarQube 代码质量平台搭建</div></div><div class="info-2"><div class="info-item-1">Jenkins 部署与 SonarQube 代码质量平台搭建公司内网环境要搭一套 CI，外网源一律不通，所有安装包都得先下载好再传进去。这种”离线两件套”（Jenkins + SonarQube）我装过两遍：第一遍边查文档边试，踩了权限和字体两个坑；第二遍顺手多了，这篇把完整流程整理出来。 一、为什么是 JenkinsJenkins 是基于 Java 的开源持续集成工具，监控持续重复的工作——拉代码、编译、测试、打包、部署，把这些动作从”人肉按顺序敲”变成”点一下按钮”。 它的定位是调度中心：自己不做具体的事，靠插件和脚本串联起 GitLab、SonarQube、构建机、部署目标。这也是它装完之后第一件事是装插件的原因。 二、部署：从 JDK 到启动Jenkins 2.4xx 之后的版本需要 JDK 11 以上，我用的 JDK 17。 1234567# 1. 安装 JDKrpm -ivh jdk-17_linux-x64_bin.rpmjava -versionrpm -qa | grep jdk        # 确认装上了，输出 jdk-17-17.0.11-7.x86_64...</div></div></div></a><a class="pagination-related" href="/2024/06/05/Ansible%E5%85%A5%E9%97%A8%E5%AE%9E%E8%B7%B5%E4%B8%8E%E7%94%9F%E4%BA%A7%E7%BA%A7Inventory/" title="Ansible 入门实践：架构、安装与生产级 Inventory 管理"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">Ansible 入门实践：架构、安装与生产级 Inventory 管理</div></div><div class="info-2"><div class="info-item-1">Ansible 入门实践：架构、安装与生产级 Inventory 管理公司服务器数量涨到三十多台的时候，我还在用最原始的办法：写个 for 循环，把 IP 列在脚本里，ssh 上去挨个执行。有一批机器的 SSH 端口改过，脚本跑一半断在中间，剩下的一半改了、一半没改——最后靠人工对账才收场。那次之后我把 Ansible 捡了起来，第一个动作就是把”哪些机器、分成几组、怎么连”从脚本里搬进 Inventory。 一、Ansible 是什么，为什么选它Ansible 是自动化配置管理工具，能力可以概括成几块：  远程执行：一条命令在多台主机上执行操作； 配置管理：批量配置软件服务，统一管理配置和启停； 事件驱动：按条件触发动作，比如”配置变了才重启服务”； 任务编排：用 playbook 把一套完整部署串起来，一条命令部署一整个架构； 跨平台：一套剧本兼容不同发行版，比如安装 Apache，CentOS 叫 httpd、Ubuntu 叫 apache2，Ansible 按系统类型分发。  它和手工脚本最本质的区别有两个：无 Agent（被控端什么都不用装，控制端通过 SSH 连过去执...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2024/04/03/Jenkins%E9%83%A8%E7%BD%B2%E4%B8%8ESonarQube%E4%BB%A3%E7%A0%81%E8%B4%A8%E9%87%8F%E5%B9%B3%E5%8F%B0/" title="Jenkins 部署与 SonarQube 代码质量平台搭建"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2024-04-03</div><div class="info-item-2">Jenkins 部署与 SonarQube 代码质量平台搭建</div></div><div class="info-2"><div class="info-item-1">Jenkins 部署与 SonarQube 代码质量平台搭建公司内网环境要搭一套 CI，外网源一律不通，所有安装包都得先下载好再传进去。这种”离线两件套”（Jenkins + SonarQube）我装过两遍：第一遍边查文档边试，踩了权限和字体两个坑；第二遍顺手多了，这篇把完整流程整理出来。 一、为什么是 JenkinsJenkins 是基于 Java 的开源持续集成工具，监控持续重复的工作——拉代码、编译、测试、打包、部署，把这些动作从”人肉按顺序敲”变成”点一下按钮”。 它的定位是调度中心：自己不做具体的事，靠插件和脚本串联起 GitLab、SonarQube、构建机、部署目标。这也是它装完之后第一件事是装插件的原因。 二、部署：从 JDK 到启动Jenkins 2.4xx 之后的版本需要 JDK 11 以上，我用的 JDK 17。 1234567# 1. 安装 JDKrpm -ivh jdk-17_linux-x64_bin.rpmjava -versionrpm -qa | grep jdk        # 确认装上了，输出 jdk-17-17.0.11-7.x86_64...</div></div></div></a><a class="pagination-related" href="/2024/01/28/GitHub%E5%8D%8F%E4%BD%9C%E5%AE%9E%E8%B7%B5PR%E6%B5%81%E7%A8%8B%E4%B8%8E%E5%88%86%E6%94%AF%E4%BF%9D%E6%8A%A4/" title="GitHub 协作实践：PR 流程、分支保护与 Actions 入门"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2024-01-28</div><div class="info-item-2">GitHub 协作实践：PR 流程、分支保护与 Actions 入门</div></div><div class="info-2"><div class="info-item-1">GitHub 协作实践：PR 流程、分支保护与 Actions 入门在真正用起来之前，我一直觉得 Pull Request 这东西有点形式主义：改几行代码，为什么要绕”建分支、推上去、开 PR、等审查、再合并”这么大一圈？直到有一次在协作项目里，我没走 PR 直接推了 main，把别人正在测的一版配置覆盖了，对着一堆报错排查了一下午。从那以后我理解了：PR 不是流程装饰，它把”谁能改什么、改完谁确认”这件事变成了可见的记录。 一、先分清 Git 和 GitHub这两个东西经常被混着叫，其实分工很清楚：  Git 是本地命令行工具，负责版本控制本身； GitHub 是基于 Git 的云端代码托管平台，在 Git 之上加了 Web 协作功能：Issue、PR、Actions、权限管理。  两者通过 git push &#x2F; git pull 协作。放到企业环境里，还有个更实际的对比：    维度 GitHub GitLab    形态 公有云 SaaS 支持私有化部署（CE 免费）   私有仓库 收费（有免费额度） 自建随你建   典型场景 开源项目、个人项目 企业内网代码平台...</div></div></div></a><a class="pagination-related" href="/2024/03/13/GitLabCICD%E8%90%BD%E5%9C%B0Runner%E4%B8%8E%E6%B5%81%E6%B0%B4%E7%BA%BF%E6%A8%A1%E6%9D%BF/" title="GitLab CI&#x2F;CD 落地：Runner 注册与流水线模板实战"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2024-03-13</div><div class="info-item-2">GitLab CI&#x2F;CD 落地：Runner 注册与流水线模板实战</div></div><div class="info-2"><div class="info-item-1">GitLab CI&#x2F;CD 落地：Runner 注册与流水线模板实战上一篇文章里 GitLab 平台已经跑起来了，但开发还在找我手动拉代码、打包、传服务器。有次周五下午发版，我连做了六次”拉码、打包、scp、解压、换软链”，第七次是回滚。当天晚上我就把流水线搭了起来——人肉发布这件事，重复三次以上就该交给机器。 一、GitLab CI 的基本模型GitLab CI&#x2F;CD 的逻辑不复杂：  代码仓库里放一个 .gitlab-ci.yml 文件，描述”要做什么”； Runner 是执行这些任务的代理，注册到 GitLab 之后领任务、干活、回报结果； 推送代码或创建 MR 触发流水线，按阶段顺序执行。  三个角色的分工：GitLab 负责调度，Runner 负责执行，yml 文件负责定义流程。运维的活主要在两块：把 Runner 管好，把 yml 模板写好给开发用。开发不需要懂 Runner 装在哪，只要知道”推代码之后跑去哪看结果”。 二、Runner 的注册与执行器选择Runner 可以注册在三个级别：项目级、组级、实例级。项目级最省事，实例级最通用，企业里一般...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Jenkins-%E6%B5%81%E6%B0%B4%E7%BA%BF%E5%AE%9E%E6%88%98%EF%BC%9A%E6%8B%89%E7%A0%81%E3%80%81%E6%9E%84%E5%BB%BA%E3%80%81%E5%8F%91%E5%B8%83%E4%B8%8E%E4%BC%81%E5%BE%AE%E9%80%9A%E7%9F%A5"><span class="toc-number">1.</span> <span class="toc-text">Jenkins 流水线实战：拉码、构建、发布与企微通知</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E5%85%88%E7%9C%8B%E6%95%B4%E6%9D%A1%E9%93%BE%E8%B7%AF%E7%9A%84%E5%85%A8%E8%B2%8C"><span class="toc-number">1.1.</span> <span class="toc-text">一、先看整条链路的全貌</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E8%AE%A9-Jenkins-%E8%83%BD%E6%8B%89%E5%88%B0-GitLab-%E7%9A%84%E4%BB%A3%E7%A0%81"><span class="toc-number">1.2.</span> <span class="toc-text">二、让 Jenkins 能拉到 GitLab 的代码</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E6%8A%8A%E4%BB%A3%E7%A0%81%E5%8F%91%E5%B8%83%E5%88%B0-WEB-%E6%9C%8D%E5%8A%A1%E5%99%A8"><span class="toc-number">1.3.</span> <span class="toc-text">三、把代码发布到 WEB 服务器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81webhook%EF%BC%9A%E8%AE%A9%E4%B8%80%E5%88%87%E8%87%AA%E5%8A%A8%E5%8F%91%E7%94%9F"><span class="toc-number">1.4.</span> <span class="toc-text">四、webhook：让一切自动发生</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E8%B4%A8%E9%87%8F%E9%97%A8%E7%A6%81%EF%BC%9A%E9%9B%86%E6%88%90-SonarQube"><span class="toc-number">1.5.</span> <span class="toc-text">五、质量门禁：集成 SonarQube</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E6%9E%84%E5%BB%BA%E7%BB%93%E6%9E%9C%E9%80%9A%E7%9F%A5%EF%BC%9A%E4%BC%81%E4%B8%9A%E5%BE%AE%E4%BF%A1"><span class="toc-number">1.6.</span> <span class="toc-text">六、构建结果通知：企业微信</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E4%BB%8E%E8%87%AA%E7%94%B1%E9%A3%8E%E6%A0%BC%E5%88%B0-Pipeline%EF%BC%8C%E5%86%8D%E5%88%B0%E7%89%88%E6%9C%AC%E5%8F%91%E5%B8%83"><span class="toc-number">1.7.</span> <span class="toc-text">七、从自由风格到 Pipeline，再到版本发布</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E7%82%B9%E5%A4%8D%E7%9B%98"><span class="toc-number">1.8.</span> <span class="toc-text">一点复盘</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2025/08/28/%E5%BD%93AI%E8%B5%B0%E8%BF%9B%E8%BF%90%E7%BB%B4%E8%BF%99%E5%8D%8A%E5%B9%B4%E7%9A%84%E8%A7%82%E5%AF%9F%E4%B8%8E%E6%80%9D%E8%80%83/" title="当 AI 走进运维：这半年的观察与思考">当 AI 走进运维：这半年的观察与思考</a><time datetime="2025-08-28T02:00:00.000Z" title="发表于 2025-08-28 10:00:00">2025-08-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/08/27/AnsibleRoles%E4%B8%8EJinja2%E9%83%A8%E7%BD%B2%E5%89%A7%E6%9C%AC%E5%B7%A5%E7%A8%8B%E5%8C%96/" title="Ansible Roles 与 Jinja2：部署剧本工程化实战">Ansible Roles 与 Jinja2：部署剧本工程化实战</a><time datetime="2024-08-27T02:00:00.000Z" title="发表于 2024-08-27 10:00:00">2024-08-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/08/04/Ansible%E6%B5%81%E7%A8%8B%E6%8E%A7%E5%88%B6%E5%AE%9E%E6%88%98when%E5%BE%AA%E7%8E%AFhandlers%E4%B8%8E%E6%A0%87%E7%AD%BE/" title="Ansible 流程控制实战：when、循环、handlers 与标签">Ansible 流程控制实战：when、循环、handlers 与标签</a><time datetime="2024-08-04T02:00:00.000Z" title="发表于 2024-08-04 10:00:00">2024-08-04</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/07/16/AnsiblePlaybook%E4%B8%8E%E5%8F%98%E9%87%8F%E4%BD%93%E7%B3%BB%E5%AE%9E%E6%88%98/" title="Ansible Playbook 与变量体系实战">Ansible Playbook 与变量体系实战</a><time datetime="2024-07-16T02:00:00.000Z" title="发表于 2024-07-16 10:00:00">2024-07-16</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/06/23/Ansible%E5%B8%B8%E7%94%A8%E6%A8%A1%E5%9D%97%E5%AE%9E%E6%88%98%E4%BB%8E%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%88%B0%E6%95%B0%E6%8D%AE%E5%BA%93/" title="Ansible 常用模块实战：从软件包到数据库">Ansible 常用模块实战：从软件包到数据库</a><time datetime="2024-06-23T02:00:00.000Z" title="发表于 2024-06-23 10:00:00">2024-06-23</time></div></div></div></div></div></div></main><footer id="footer" style="background: transparent;"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2023 - 2026 By LuminDream</span></div><div class="footer_custom_text"><div class="site-runtime">此间小站 · 已相伴 <span id="site-runtime">点亮中</span></div></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.6.2"></script><script src="/js/main.js?v=5.6.2"></script><script src="/js/tw_cn.js?v=5.6.2"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.14/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page@5.2.0/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"></div><script>(function(){var s=new Date("2023-03-01T00:00:00+08:00");function p(n){return n<10?"0"+n:n}function tick(){var total=Math.floor((Date.now()-s)/1000),el=document.getElementById("site-runtime");if(el){el.textContent=Math.floor(total/86400)+" 天 "+p(Math.floor(total%86400/3600))+" 时 "+p(Math.floor(total%3600/60))+" 分 "+p(total%60)+" 秒"}}tick();setInterval(tick,1000)})();</script><canvas class="fireworks" mobile="false"></canvas><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/fireworks.min.js"></script><script defer="defer" id="fluttering_ribbon" mobile="true" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章..." type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.6.2"></script></div></div></body></html>

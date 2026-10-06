@@ -1,0 +1,347 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>GitHub 协作实践：PR 流程、分支保护与 Actions 入门 | LuminDream's Blogs</title><meta name="author" content="LuminDream"><meta name="copyright" content="LuminDream"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="从 Fork&#x2F;Clone 的区别讲到 PR 完整流程、分支保护规则和 Actions 最小示例，把 GitHub 当成协作平台而不是代码网盘来用。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="GitHub 协作实践：PR 流程、分支保护与 Actions 入门">
+<meta property="og:url" content="https://www.lumindream.site/2024/01/28/GitHub%E5%8D%8F%E4%BD%9C%E5%AE%9E%E8%B7%B5PR%E6%B5%81%E7%A8%8B%E4%B8%8E%E5%88%86%E6%94%AF%E4%BF%9D%E6%8A%A4/">
+<meta property="og:site_name" content="LuminDream&#39;s Blogs">
+<meta property="og:description" content="从 Fork&#x2F;Clone 的区别讲到 PR 完整流程、分支保护规则和 Actions 最小示例，把 GitHub 当成协作平台而不是代码网盘来用。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://www.lumindream.site/images/pic_touxiang.png">
+<meta property="article:published_time" content="2024-01-28T02:00:00.000Z">
+<meta property="article:modified_time" content="2024-01-28T02:00:00.000Z">
+<meta property="article:author" content="LuminDream">
+<meta property="article:tag" content="CI&#x2F;CD">
+<meta property="article:tag" content="Git">
+<meta property="article:tag" content="GitHub">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://www.lumindream.site/images/pic_touxiang.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "GitHub 协作实践：PR 流程、分支保护与 Actions 入门",
+  "url": "https://www.lumindream.site/2024/01/28/GitHub%E5%8D%8F%E4%BD%9C%E5%AE%9E%E8%B7%B5PR%E6%B5%81%E7%A8%8B%E4%B8%8E%E5%88%86%E6%94%AF%E4%BF%9D%E6%8A%A4/",
+  "image": "https://www.lumindream.site/images/pic_touxiang.png",
+  "datePublished": "2024-01-28T02:00:00.000Z",
+  "dateModified": "2024-01-28T02:00:00.000Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "LuminDream",
+      "url": "https://www.lumindream.site"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/images/pic_blogweb.png"><link rel="canonical" href="https://www.lumindream.site/2024/01/28/GitHub%E5%8D%8F%E4%BD%9C%E5%AE%9E%E8%B7%B5PR%E6%B5%81%E7%A8%8B%E4%B8%8E%E5%88%86%E6%94%AF%E4%BF%9D%E6%8A%A4/"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><meta name="google-site-verification" content="google6fbb5e4d2b11068f"/><meta name="baidu-site-verification" content="codeva-Wf0ZuoEmLd"/><link rel="stylesheet" href="/css/index.css?v=5.6.2"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.14/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d1f17')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          const mediaQueryDark = window.matchMedia('(prefers-color-scheme: dark)')
+          const mediaQueryLight = window.matchMedia('(prefers-color-scheme: light)')
+
+          if (theme === undefined) {
+            if (mediaQueryLight.matches) activateLightMode()
+            else if (mediaQueryDark.matches) activateDarkMode()
+            else {
+              const hour = new Date().getHours()
+              const start = 6
+              const end = 18
+              const isNight =
+                start < end
+                    ? hour < start || hour >= end
+                    : hour >= start || hour < end
+              isNight ? activateDarkMode() : activateLightMode()
+            }
+            mediaQueryDark.addEventListener('change', e => {
+              if (saveToLocal.get('theme') === undefined) {
+                e.matches ? activateDarkMode() : activateLightMode()
+              }
+            })
+          } else {
+            theme === 'light' ? activateLightMode() : activateDarkMode()
+          }
+        
+      
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":true,"top_n_per_article":-1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: true,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: true
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'GitHub 协作实践：PR 流程、分支保护与 Actions 入门',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/about-custom.css"><link rel="stylesheet" href="/css/theme-skin.css?v=5"><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="LuminDream's Blogs" type="application/atom+xml">
+</head><body><div class="bg-animation" id="web_bg"></div><script>(() => {
+  const arr = ["background-image: url(/images/pic_bg1.png);","background-image: url(/images/pic_bg2.png);","background-image: url(/images/pic_bg3.png);"]
+  const webBgDiv = document.getElementById('web_bg')
+
+  const setRandomBg = () => {
+    webBgDiv.style = arr[Math.floor(Math.random() * arr.length)]
+    requestAnimationFrame(() => webBgDiv.classList.add('bg-animation'))
+  }
+
+  document.addEventListener('pjax:send', () => {
+    webBgDiv.style = ''
+    webBgDiv.classList.remove('bg-animation')
+  })
+
+  document.addEventListener('pjax:complete', setRandomBg)
+  document.addEventListener('DOMContentLoaded', setRandomBg)
+})()
+</script><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/images/pic_touxiang.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/ loading='lazy'></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">39</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">49</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">4</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group hide"><i class="fa-fw fas fa-book"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/projects/"><i class="fa-fw fas fa-code"></i><span> 项目</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-heart"></i><span> 生活</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/essay/"><i class="fa-fw fas fa-pen-fancy"></i><span> 随笔</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="not-top-img fixed" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><img class="site-icon" src="/images/pic_blogweb.png" alt="Logo" loading='lazy'><span class="site-name">LuminDream's Blogs</span></a><a class="nav-page-title" href="/"><span class="site-name">GitHub 协作实践：PR 流程、分支保护与 Actions 入门</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group hide"><i class="fa-fw fas fa-book"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/projects/"><i class="fa-fw fas fa-code"></i><span> 项目</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-heart"></i><span> 生活</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/essay/"><i class="fa-fw fas fa-pen-fancy"></i><span> 随笔</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav></header><main class="layout" id="content-inner"><div id="post"><div id="post-info"><h1 class="post-title">GitHub 协作实践：PR 流程、分支保护与 Actions 入门</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="fa-fw post-meta-icon far fa-calendar-alt"></i><span class="post-meta-label">发表于</span><time datetime="2024-01-28T02:00:00.000Z" title="发表于 2024-01-28 10:00:00">2024-01-28</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E8%BF%90%E7%BB%B4/">计算机运维</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">1.7k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>5分钟</span></span></div></div></div><article class="container post-content" id="article-container"><h1 id="GitHub-协作实践：PR-流程、分支保护与-Actions-入门"><a href="#GitHub-协作实践：PR-流程、分支保护与-Actions-入门" class="headerlink" title="GitHub 协作实践：PR 流程、分支保护与 Actions 入门"></a>GitHub 协作实践：PR 流程、分支保护与 Actions 入门</h1><p>在真正用起来之前，我一直觉得 Pull Request 这东西有点形式主义：改几行代码，为什么要绕”建分支、推上去、开 PR、等审查、再合并”这么大一圈？直到有一次在协作项目里，我没走 PR 直接推了 main，把别人正在测的一版配置覆盖了，对着一堆报错排查了一下午。从那以后我理解了：PR 不是流程装饰，它把”谁能改什么、改完谁确认”这件事变成了可见的记录。</p>
+<h2 id="一、先分清-Git-和-GitHub"><a href="#一、先分清-Git-和-GitHub" class="headerlink" title="一、先分清 Git 和 GitHub"></a>一、先分清 Git 和 GitHub</h2><p>这两个东西经常被混着叫，其实分工很清楚：</p>
+<ul>
+<li><strong>Git</strong> 是本地命令行工具，负责版本控制本身；</li>
+<li><strong>GitHub</strong> 是基于 Git 的云端代码托管平台，在 Git 之上加了 Web 协作功能：Issue、PR、Actions、权限管理。</li>
+</ul>
+<p>两者通过 <code>git push</code> &#x2F; <code>git pull</code> 协作。放到企业环境里，还有个更实际的对比：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>GitHub</th>
+<th>GitLab</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>形态</td>
+<td>公有云 SaaS</td>
+<td>支持私有化部署（CE 免费）</td>
+</tr>
+<tr>
+<td>私有仓库</td>
+<td>收费（有免费额度）</td>
+<td>自建随你建</td>
+</tr>
+<tr>
+<td>典型场景</td>
+<td>开源项目、个人项目</td>
+<td>企业内网代码平台</td>
+</tr>
+</tbody></table>
+<p>国内企业内网普遍用自建 GitLab，代码不出网。所以运维岗位日常接触 GitLab 更多，但 GitHub 的协作模型是相通的，先把 PR 这套玩明白，换平台只是换个叫法（GitHub 叫 PR，GitLab 叫 MR）。</p>
+<h2 id="二、连接-GitHub-的两种方式"><a href="#二、连接-GitHub-的两种方式" class="headerlink" title="二、连接 GitHub 的两种方式"></a>二、连接 GitHub 的两种方式</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># HTTPS：用 Token 认证，适合临时使用或 22 端口被封的网络</span></span><br><span class="line">git <span class="built_in">clone</span> https://github.com/user/repo.git</span><br><span class="line"></span><br><span class="line"><span class="comment"># SSH：用密钥认证，日常长期使用推荐</span></span><br><span class="line">ssh-keygen -t ed25519 -C <span class="string">&quot;you@example.com&quot;</span></span><br><span class="line"><span class="built_in">cat</span> ~/.ssh/id_ed25519.pub     <span class="comment"># 贴到 Settings → SSH and GPG keys</span></span><br><span class="line">ssh -T git@github.com         <span class="comment"># 看到 Hi xxx! You&#x27;ve successfully authenticated 就是通了</span></span><br></pre></td></tr></table></figure>
+
+<p>企业内网经常封 22 端口，走 SSH 的仓库会连不上，这时要么改用 HTTPS + Token，要么让网络同事放行 <code>ssh.github.com:443</code>。这一点在做企业项目时值得提前确认，不然 clone 一次卡十分钟。</p>
+<h2 id="三、把本地仓库推上-GitHub"><a href="#三、把本地仓库推上-GitHub" class="headerlink" title="三、把本地仓库推上 GitHub"></a>三、把本地仓库推上 GitHub</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">git init &amp;&amp; git add . &amp;&amp; git commit -m <span class="string">&quot;Initial commit&quot;</span></span><br><span class="line">git remote add origin https://github.com/user/repo.git</span><br><span class="line">git push -u origin main</span><br></pre></td></tr></table></figure>
+
+<p>顺带把 Fork 和 Clone 的区别说清楚，这是两个容易混的概念：</p>
+<ul>
+<li><strong>Clone</strong>：把仓库下载到本地，日常开发用这个；</li>
+<li><strong>Fork</strong>：在 GitHub 云端把别人的仓库复制一份到你账户下，和原仓库保留关联，改完可以向上游提 PR——开源贡献用这个。</li>
+</ul>
+<p>工作流的差别也在这：给别人的项目提 PR 要先 Fork 再 Clone；自己团队的仓库直接 Clone。</p>
+<h2 id="四、PR-的标准流程"><a href="#四、PR-的标准流程" class="headerlink" title="四、PR 的标准流程"></a>四、PR 的标准流程</h2><p>一个完整的 PR 流程大概是这样：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ① 从 main 创建功能分支</span></span><br><span class="line">git switch -c feature/xxx</span><br><span class="line"><span class="comment"># ② 开发、提交、推送</span></span><br><span class="line">git add . &amp;&amp; git commit -m <span class="string">&quot;feat: 增加导出功能&quot;</span></span><br><span class="line">git push -u origin feature/xxx</span><br><span class="line"><span class="comment"># ③ 网页上创建 Pull Request（一个 PR 只做一件事，关联 Issue 用 Closes #42）</span></span><br><span class="line"><span class="comment"># ④ Code Review：评论 / 通过 / 要求修改</span></span><br><span class="line"><span class="comment"># ⑤ 合并：Merge Commit / Squash / Rebase 三种方式，按团队规则选</span></span><br></pre></td></tr></table></figure>
+
+<p>合并方式的差别值得说一下：</p>
+<ul>
+<li><strong>Merge Commit</strong>：保留全部提交记录和合并节点，历史完整但线条多；</li>
+<li><strong>Squash</strong>：把分支里的多个提交压成一条并进 main，main 的历史干净，适合”开发过程一团乱、结果要整洁”的场景；</li>
+<li><strong>Rebase</strong>：把分支提交逐条挪到 main 顶端，线性历史，但对提交规范要求最高。</li>
+</ul>
+<p>Review 环节有三种状态：Comment（评论，不阻塞合并）、Approve（通过）、Request Changes（要求修改，阻塞合并直到改完）。</p>
+<p>写 PR 有几个实用的经验：一个 PR 只做一件事，标题写清做什么，描述里放复现步骤或截图，CI 没过先别喊人看。曾经有个项目 PR 里塞了三个功能的改动，审查的人直接退回要求拆成三个——这不算刁难，是为了出问题时能精准回滚。</p>
+<h2 id="五、分支保护：main-的最后防线"><a href="#五、分支保护：main-的最后防线" class="headerlink" title="五、分支保护：main 的最后防线"></a>五、分支保护：main 的最后防线</h2><p>协作项目里，main 分支必须设保护规则，不然”误推覆盖”是迟早的事。GitHub 的分支保护常用选项（GitLab 里对应 Protected branches）：</p>
+<table>
+<thead>
+<tr>
+<th>保护选项</th>
+<th>作用</th>
+<th>建议</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Require a PR before merging</td>
+<td>所有改动必须走 PR</td>
+<td>必开</td>
+</tr>
+<tr>
+<td>Require approvals</td>
+<td>需要指定人数审查通过</td>
+<td>至少 1 人</td>
+</tr>
+<tr>
+<td>Dismiss stale reviews</td>
+<td>有新提交时旧审查自动失效</td>
+<td>推荐</td>
+</tr>
+<tr>
+<td>Require status checks</td>
+<td>必须通过 CI 检查才能合并</td>
+<td>推荐</td>
+</tr>
+<tr>
+<td>Do not allow bypassing</td>
+<td>管理员也不能绕过</td>
+<td>推荐</td>
+</tr>
+</tbody></table>
+<p>依赖这些规则之后，我自己的起手式就变成了：新仓库先拉保护规则，再接 CI，最后才邀请协作者。</p>
+<p>安全相关的功能也顺手记一下：</p>
+<ul>
+<li><strong>Dependabot</strong>：自动检测依赖漏洞并创建修复 PR；</li>
+<li><strong>Secret Scanning</strong>：扫描仓库里泄露的密钥（Token、私钥等 200 多种模式）；</li>
+<li><strong>CodeQL</strong>：代码安全分析，偏静态扫描。</li>
+</ul>
+<p>运维视角最重要的一条：<strong>密钥一旦进了仓库，删除文件是不够的</strong>——历史里还在，平台扫描照样会报。正确姿势是立即去服务端撤销并轮换密钥，然后再清理 git 历史，顺序不能反。</p>
+<h2 id="六、GitHub-Actions-最小入门"><a href="#六、GitHub-Actions-最小入门" class="headerlink" title="六、GitHub Actions 最小入门"></a>六、GitHub Actions 最小入门</h2><p>GitHub Actions 是 GitHub 内置的 CI&#x2F;CD。结构上：事件（push&#x2F;PR&#x2F;定时）触发 Workflow，一个 Workflow 包含多个 Job，Job 里跑多个 Step。</p>
+<p>概念和 GitLab CI 对得上：Workflow ≈ Pipeline，Job ≈ Job，Step ≈ Script。写过一个就能看懂另一个。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># .github/workflows/ci.yml 最小示例</span></span><br><span class="line"><span class="attr">name:</span> <span class="string">CI</span> <span class="string">Pipeline</span></span><br><span class="line"><span class="attr">on:</span></span><br><span class="line">  <span class="attr">push:</span></span><br><span class="line">    <span class="attr">branches:</span> [<span class="string">main</span>]</span><br><span class="line"><span class="attr">jobs:</span></span><br><span class="line">  <span class="attr">build-and-test:</span></span><br><span class="line">    <span class="attr">runs-on:</span> <span class="string">ubuntu-latest</span></span><br><span class="line">    <span class="attr">steps:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">actions/checkout@v4</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">actions/setup-node@v4</span></span><br><span class="line">        <span class="attr">with:</span></span><br><span class="line">          <span class="attr">node-version:</span> <span class="number">18</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">run:</span> <span class="string">npm</span> <span class="string">ci</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">run:</span> <span class="string">npm</span> <span class="string">test</span></span><br></pre></td></tr></table></figure>
+
+<p>这段配置放进去，每次推 main 就会自动拉代码、装 Node、跑测试。工作里它的价值是：<strong>把”合并前必须跑通”这件事从口头约定变成机器执行</strong>。</p>
+<p>密钥管理走 Repository secrets &#x2F; Organization secrets &#x2F; Environment secrets 三级，日志里自动打码，但仍然有个原则：禁止用 <code>echo</code> 把 Secret 打印出来调试，打码不是绝对可靠的。</p>
+<p>一个对比感受：GitHub Actions 是 SaaS，开箱即用但机器在别人那里；GitLab 的 Runner 是自己部署的，脏活累活（装 Docker、扩机器、排网络）都是运维的活。这也是为什么企业里 CI&#x2F;CD 平台的维护归运维。</p>
+<h2 id="收尾的一点感受"><a href="#收尾的一点感受" class="headerlink" title="收尾的一点感受"></a>收尾的一点感受</h2><p>GitHub 用熟的关键是把三件事串起来：<strong>分支保护挡住误操作，PR 流程留下审查记录，Actions 保证合并的都是过了测试的代码</strong>。这三样配齐，才算把 GitHub 从”代码网盘”用成了协作平台。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://www.lumindream.site">LuminDream</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://www.lumindream.site/2024/01/28/GitHub%E5%8D%8F%E4%BD%9C%E5%AE%9E%E8%B7%B5PR%E6%B5%81%E7%A8%8B%E4%B8%8E%E5%88%86%E6%94%AF%E4%BF%9D%E6%8A%A4/">https://www.lumindream.site/2024/01/28/GitHub%E5%8D%8F%E4%BD%9C%E5%AE%9E%E8%B7%B5PR%E6%B5%81%E7%A8%8B%E4%B8%8E%E5%88%86%E6%94%AF%E4%BF%9D%E6%8A%A4/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://www.lumindream.site" target="_blank">LuminDream's Blogs</a>！</span></div></div><div class="tag_share"></div><div class="post-reward"><div class="reward-button"><i class="fas fa-qrcode"></i>赞助</div><div class="reward-main"><ul class="reward-all"><li class="reward-item"><a href="/images/wx.png" target="_blank"><img class="post-qr-code-img" src="/images/wx.png" alt="微信"/ loading='lazy'></a><div class="post-qr-code-desc">微信</div></li><li class="reward-item"><a href="/images/zfb.jpg" target="_blank"><img class="post-qr-code-img" src="/images/zfb.jpg" alt="支付宝"/ loading='lazy'></a><div class="post-qr-code-desc">支付宝</div></li></ul></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2024/01/11/Git%E6%A0%B8%E5%BF%83%E5%8E%9F%E7%90%86%E4%B8%8E%E5%91%BD%E4%BB%A4%E5%AE%9E%E6%88%98/" title="Git 核心原理与命令实战：三区模型、回退与冲突处理"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">Git 核心原理与命令实战：三区模型、回退与冲突处理</div></div><div class="info-2"><div class="info-item-1">Git 核心原理与命令实战：三区模型、回退与冲突处理我最初对 Git 的态度和很多人一样：会 add、会 commit、会 push，就觉得够用了。直到有次改错了仓库里的配置文件需要回退，我在 reset 和 revert 之间犹豫了半天，最后选了 reset 强推上去，顺手把同事当天的一条提交也干掉了。那次之后我把 Git 的底层模型认真补了一遍，就是这篇的内容。 一、Git 解决的是什么问题Git 是分布式版本控制系统。它记录文件内容的变化，可以回退到任意历史版本、对比差异、多人协作不互相覆盖，并且追踪每次修改的作者和时间。 它和 SVN 这类集中式的核心区别在”副本”上：    对比项 集中式（SVN） 分布式（Git）    版本库位置 只在中央服务器 每个开发者都有完整副本   离线操作 只能查看，不能提交 可以提交、建分支、看历史   单点故障 服务器挂了全员停摆 任何一份克隆都能恢复   分支成本 昂贵，相当于复制目录 极低，本质只是加一个指针   速度 依赖网络 大部分操作在本地完成   工作里有个直观的体现：SVN 时代回滚要连服务器、要权限；Git 时代我在本...</div></div></div></a><a class="pagination-related" href="/2024/02/20/GitLab%E8%BF%90%E7%BB%B4%E5%AE%9E%E6%88%98%E9%83%A8%E7%BD%B2%E6%9D%83%E9%99%90%E4%B8%8E%E5%A4%87%E4%BB%BD%E6%81%A2%E5%A4%8D/" title="GitLab 运维实战：部署、权限模型与备份恢复"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">GitLab 运维实战：部署、权限模型与备份恢复</div></div><div class="info-2"><div class="info-item-1">GitLab 运维实战：部署、权限模型与备份恢复第一次接手 GitLab 是入职第二个月，前任运维交接时说了一句”这平台平时不用管，坏了再说”。结果第三周磁盘就写满了——仓库备份和日志把根分区撑爆，全组开发停工半天。从那以后我给 GitLab 定了两条规矩：磁盘单独挂盘并设监控，备份每天跑并且每月做一次恢复演练。这篇就是这套维护工作的完整记录。 一、运维和开发在 Git 上不是一回事同样是用 Git，职责完全不同：    维度 开发工程师 运维工程师    角色 Git 的使用者 平台的维护者 + 规范制定者   日常 写代码、提交、分支、合并、解冲突 部署维护 GitLab、管权限、备份恢复、配 Runner   关心点 我的代码能不能提交合并 平台稳不稳、权限对不对、能不能审计   典型操作 add &#x2F; commit &#x2F; push &#x2F; merge gitlab-ctl、gitlab-rake、备份恢复   输出 业务代码 流水线模板、分支规范、审计记录   落到日常工作里，运维侧大概有这几块：  GitLab 平台运维：安装升级、备份恢复、磁盘监...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2024/04/21/Jenkins%E6%B5%81%E6%B0%B4%E7%BA%BF%E5%AE%9E%E6%88%98%E6%8B%89%E7%A0%81%E5%8F%91%E5%B8%83%E4%B8%8E%E4%BC%81%E5%BE%AE%E9%80%9A%E7%9F%A5/" title="Jenkins 流水线实战：拉码、构建、发布与企微通知"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2024-04-21</div><div class="info-item-2">Jenkins 流水线实战：拉码、构建、发布与企微通知</div></div><div class="info-2"><div class="info-item-1">Jenkins 流水线实战：拉码、构建、发布与企微通知Jenkins 装好、SonarQube 能扫之后，我把整条链路串了一遍：开发推代码到 GitLab，Jenkins 自动拉取、扫描、打包，分发到 WEB 服务器完成切换，最后往企业微信群里发一条通知。这篇文章把这套流程的每一段拆开讲清楚，包括那个”软链切换”的发布方案——它是整条链路里最值得抄走的设计。 一、先看整条链路的全貌12345678910111213开发 push 代码   │   ▼GitLab 仓库 ── webhook 触发 ──► Jenkins                                  │  1. 拉取代码（SSH 密钥）                                  │  2. SonarQube 代码扫描                                  │  3. 打包 tar.gz                                  ▼                             scp 分发到 WEB 服务器 ...</div></div></div></a><a class="pagination-related" href="/2024/03/13/GitLabCICD%E8%90%BD%E5%9C%B0Runner%E4%B8%8E%E6%B5%81%E6%B0%B4%E7%BA%BF%E6%A8%A1%E6%9D%BF/" title="GitLab CI&#x2F;CD 落地：Runner 注册与流水线模板实战"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2024-03-13</div><div class="info-item-2">GitLab CI&#x2F;CD 落地：Runner 注册与流水线模板实战</div></div><div class="info-2"><div class="info-item-1">GitLab CI&#x2F;CD 落地：Runner 注册与流水线模板实战上一篇文章里 GitLab 平台已经跑起来了，但开发还在找我手动拉代码、打包、传服务器。有次周五下午发版，我连做了六次”拉码、打包、scp、解压、换软链”，第七次是回滚。当天晚上我就把流水线搭了起来——人肉发布这件事，重复三次以上就该交给机器。 一、GitLab CI 的基本模型GitLab CI&#x2F;CD 的逻辑不复杂：  代码仓库里放一个 .gitlab-ci.yml 文件，描述”要做什么”； Runner 是执行这些任务的代理，注册到 GitLab 之后领任务、干活、回报结果； 推送代码或创建 MR 触发流水线，按阶段顺序执行。  三个角色的分工：GitLab 负责调度，Runner 负责执行，yml 文件负责定义流程。运维的活主要在两块：把 Runner 管好，把 yml 模板写好给开发用。开发不需要懂 Runner 装在哪，只要知道”推代码之后跑去哪看结果”。 二、Runner 的注册与执行器选择Runner 可以注册在三个级别：项目级、组级、实例级。项目级最省事，实例级最通用，企业里一般...</div></div></div></a><a class="pagination-related" href="/2024/01/11/Git%E6%A0%B8%E5%BF%83%E5%8E%9F%E7%90%86%E4%B8%8E%E5%91%BD%E4%BB%A4%E5%AE%9E%E6%88%98/" title="Git 核心原理与命令实战：三区模型、回退与冲突处理"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2024-01-11</div><div class="info-item-2">Git 核心原理与命令实战：三区模型、回退与冲突处理</div></div><div class="info-2"><div class="info-item-1">Git 核心原理与命令实战：三区模型、回退与冲突处理我最初对 Git 的态度和很多人一样：会 add、会 commit、会 push，就觉得够用了。直到有次改错了仓库里的配置文件需要回退，我在 reset 和 revert 之间犹豫了半天，最后选了 reset 强推上去，顺手把同事当天的一条提交也干掉了。那次之后我把 Git 的底层模型认真补了一遍，就是这篇的内容。 一、Git 解决的是什么问题Git 是分布式版本控制系统。它记录文件内容的变化，可以回退到任意历史版本、对比差异、多人协作不互相覆盖，并且追踪每次修改的作者和时间。 它和 SVN 这类集中式的核心区别在”副本”上：    对比项 集中式（SVN） 分布式（Git）    版本库位置 只在中央服务器 每个开发者都有完整副本   离线操作 只能查看，不能提交 可以提交、建分支、看历史   单点故障 服务器挂了全员停摆 任何一份克隆都能恢复   分支成本 昂贵，相当于复制目录 极低，本质只是加一个指针   速度 依赖网络 大部分操作在本地完成   工作里有个直观的体现：SVN 时代回滚要连服务器、要权限；Git 时代我在本...</div></div></div></a><a class="pagination-related" href="/2024/04/03/Jenkins%E9%83%A8%E7%BD%B2%E4%B8%8ESonarQube%E4%BB%A3%E7%A0%81%E8%B4%A8%E9%87%8F%E5%B9%B3%E5%8F%B0/" title="Jenkins 部署与 SonarQube 代码质量平台搭建"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2024-04-03</div><div class="info-item-2">Jenkins 部署与 SonarQube 代码质量平台搭建</div></div><div class="info-2"><div class="info-item-1">Jenkins 部署与 SonarQube 代码质量平台搭建公司内网环境要搭一套 CI，外网源一律不通，所有安装包都得先下载好再传进去。这种”离线两件套”（Jenkins + SonarQube）我装过两遍：第一遍边查文档边试，踩了权限和字体两个坑；第二遍顺手多了，这篇把完整流程整理出来。 一、为什么是 JenkinsJenkins 是基于 Java 的开源持续集成工具，监控持续重复的工作——拉代码、编译、测试、打包、部署，把这些动作从”人肉按顺序敲”变成”点一下按钮”。 它的定位是调度中心：自己不做具体的事，靠插件和脚本串联起 GitLab、SonarQube、构建机、部署目标。这也是它装完之后第一件事是装插件的原因。 二、部署：从 JDK 到启动Jenkins 2.4xx 之后的版本需要 JDK 11 以上，我用的 JDK 17。 1234567# 1. 安装 JDKrpm -ivh jdk-17_linux-x64_bin.rpmjava -versionrpm -qa | grep jdk        # 确认装上了，输出 jdk-17-17.0.11-7.x86_64...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#GitHub-%E5%8D%8F%E4%BD%9C%E5%AE%9E%E8%B7%B5%EF%BC%9APR-%E6%B5%81%E7%A8%8B%E3%80%81%E5%88%86%E6%94%AF%E4%BF%9D%E6%8A%A4%E4%B8%8E-Actions-%E5%85%A5%E9%97%A8"><span class="toc-number">1.</span> <span class="toc-text">GitHub 协作实践：PR 流程、分支保护与 Actions 入门</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E5%85%88%E5%88%86%E6%B8%85-Git-%E5%92%8C-GitHub"><span class="toc-number">1.1.</span> <span class="toc-text">一、先分清 Git 和 GitHub</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E8%BF%9E%E6%8E%A5-GitHub-%E7%9A%84%E4%B8%A4%E7%A7%8D%E6%96%B9%E5%BC%8F"><span class="toc-number">1.2.</span> <span class="toc-text">二、连接 GitHub 的两种方式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E6%8A%8A%E6%9C%AC%E5%9C%B0%E4%BB%93%E5%BA%93%E6%8E%A8%E4%B8%8A-GitHub"><span class="toc-number">1.3.</span> <span class="toc-text">三、把本地仓库推上 GitHub</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81PR-%E7%9A%84%E6%A0%87%E5%87%86%E6%B5%81%E7%A8%8B"><span class="toc-number">1.4.</span> <span class="toc-text">四、PR 的标准流程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E5%88%86%E6%94%AF%E4%BF%9D%E6%8A%A4%EF%BC%9Amain-%E7%9A%84%E6%9C%80%E5%90%8E%E9%98%B2%E7%BA%BF"><span class="toc-number">1.5.</span> <span class="toc-text">五、分支保护：main 的最后防线</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81GitHub-Actions-%E6%9C%80%E5%B0%8F%E5%85%A5%E9%97%A8"><span class="toc-number">1.6.</span> <span class="toc-text">六、GitHub Actions 最小入门</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%94%B6%E5%B0%BE%E7%9A%84%E4%B8%80%E7%82%B9%E6%84%9F%E5%8F%97"><span class="toc-number">1.7.</span> <span class="toc-text">收尾的一点感受</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2025/08/28/%E5%BD%93AI%E8%B5%B0%E8%BF%9B%E8%BF%90%E7%BB%B4%E8%BF%99%E5%8D%8A%E5%B9%B4%E7%9A%84%E8%A7%82%E5%AF%9F%E4%B8%8E%E6%80%9D%E8%80%83/" title="当 AI 走进运维：这半年的观察与思考">当 AI 走进运维：这半年的观察与思考</a><time datetime="2025-08-28T02:00:00.000Z" title="发表于 2025-08-28 10:00:00">2025-08-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/08/27/AnsibleRoles%E4%B8%8EJinja2%E9%83%A8%E7%BD%B2%E5%89%A7%E6%9C%AC%E5%B7%A5%E7%A8%8B%E5%8C%96/" title="Ansible Roles 与 Jinja2：部署剧本工程化实战">Ansible Roles 与 Jinja2：部署剧本工程化实战</a><time datetime="2024-08-27T02:00:00.000Z" title="发表于 2024-08-27 10:00:00">2024-08-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/08/04/Ansible%E6%B5%81%E7%A8%8B%E6%8E%A7%E5%88%B6%E5%AE%9E%E6%88%98when%E5%BE%AA%E7%8E%AFhandlers%E4%B8%8E%E6%A0%87%E7%AD%BE/" title="Ansible 流程控制实战：when、循环、handlers 与标签">Ansible 流程控制实战：when、循环、handlers 与标签</a><time datetime="2024-08-04T02:00:00.000Z" title="发表于 2024-08-04 10:00:00">2024-08-04</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/07/16/AnsiblePlaybook%E4%B8%8E%E5%8F%98%E9%87%8F%E4%BD%93%E7%B3%BB%E5%AE%9E%E6%88%98/" title="Ansible Playbook 与变量体系实战">Ansible Playbook 与变量体系实战</a><time datetime="2024-07-16T02:00:00.000Z" title="发表于 2024-07-16 10:00:00">2024-07-16</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/06/23/Ansible%E5%B8%B8%E7%94%A8%E6%A8%A1%E5%9D%97%E5%AE%9E%E6%88%98%E4%BB%8E%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%88%B0%E6%95%B0%E6%8D%AE%E5%BA%93/" title="Ansible 常用模块实战：从软件包到数据库">Ansible 常用模块实战：从软件包到数据库</a><time datetime="2024-06-23T02:00:00.000Z" title="发表于 2024-06-23 10:00:00">2024-06-23</time></div></div></div></div></div></div></main><footer id="footer" style="background: transparent;"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2023 - 2026 By LuminDream</span></div><div class="footer_custom_text"><div class="site-runtime">此间小站 · 已相伴 <span id="site-runtime">点亮中</span></div></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.6.2"></script><script src="/js/main.js?v=5.6.2"></script><script src="/js/tw_cn.js?v=5.6.2"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.14/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page@5.2.0/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"></div><script>(function(){var s=new Date("2023-03-01T00:00:00+08:00");function p(n){return n<10?"0"+n:n}function tick(){var total=Math.floor((Date.now()-s)/1000),el=document.getElementById("site-runtime");if(el){el.textContent=Math.floor(total/86400)+" 天 "+p(Math.floor(total%86400/3600))+" 时 "+p(Math.floor(total%3600/60))+" 分 "+p(total%60)+" 秒"}}tick();setInterval(tick,1000)})();</script><canvas class="fireworks" mobile="false"></canvas><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/fireworks.min.js"></script><script defer="defer" id="fluttering_ribbon" mobile="true" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章..." type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.6.2"></script></div></div></body></html>

@@ -1,0 +1,312 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查 | LuminDream's Blogs</title><meta name="author" content="LuminDream"><meta name="copyright" content="LuminDream"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="单台 Tomcat 撑不住之后：两节点集群怎么搭、静态资源如何共享、用户在集群里掉登录态怎么用 Redis 解决，以及启动失败&#x2F;CPU 打满&#x2F;线程池满的排查记录。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查">
+<meta property="og:url" content="https://www.lumindream.site/2023/09/20/Tomcat%E9%9B%86%E7%BE%A4%E5%AE%9E%E6%88%98Nginx%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E4%B8%8ERedis%E4%BC%9A%E8%AF%9D%E5%85%B1%E4%BA%AB/">
+<meta property="og:site_name" content="LuminDream&#39;s Blogs">
+<meta property="og:description" content="单台 Tomcat 撑不住之后：两节点集群怎么搭、静态资源如何共享、用户在集群里掉登录态怎么用 Redis 解决，以及启动失败&#x2F;CPU 打满&#x2F;线程池满的排查记录。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://www.lumindream.site/images/pic_touxiang.png">
+<meta property="article:published_time" content="2023-09-20T02:00:00.000Z">
+<meta property="article:modified_time" content="2023-09-20T02:00:00.000Z">
+<meta property="article:author" content="LuminDream">
+<meta property="article:tag" content="Nginx">
+<meta property="article:tag" content="Tomcat">
+<meta property="article:tag" content="负载均衡">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://www.lumindream.site/images/pic_touxiang.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查",
+  "url": "https://www.lumindream.site/2023/09/20/Tomcat%E9%9B%86%E7%BE%A4%E5%AE%9E%E6%88%98Nginx%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E4%B8%8ERedis%E4%BC%9A%E8%AF%9D%E5%85%B1%E4%BA%AB/",
+  "image": "https://www.lumindream.site/images/pic_touxiang.png",
+  "datePublished": "2023-09-20T02:00:00.000Z",
+  "dateModified": "2023-09-20T02:00:00.000Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "LuminDream",
+      "url": "https://www.lumindream.site"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/images/pic_blogweb.png"><link rel="canonical" href="https://www.lumindream.site/2023/09/20/Tomcat%E9%9B%86%E7%BE%A4%E5%AE%9E%E6%88%98Nginx%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E4%B8%8ERedis%E4%BC%9A%E8%AF%9D%E5%85%B1%E4%BA%AB/"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><meta name="google-site-verification" content="google6fbb5e4d2b11068f"/><meta name="baidu-site-verification" content="codeva-Wf0ZuoEmLd"/><link rel="stylesheet" href="/css/index.css?v=5.6.2"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.14/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d1f17')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          const mediaQueryDark = window.matchMedia('(prefers-color-scheme: dark)')
+          const mediaQueryLight = window.matchMedia('(prefers-color-scheme: light)')
+
+          if (theme === undefined) {
+            if (mediaQueryLight.matches) activateLightMode()
+            else if (mediaQueryDark.matches) activateDarkMode()
+            else {
+              const hour = new Date().getHours()
+              const start = 6
+              const end = 18
+              const isNight =
+                start < end
+                    ? hour < start || hour >= end
+                    : hour >= start || hour < end
+              isNight ? activateDarkMode() : activateLightMode()
+            }
+            mediaQueryDark.addEventListener('change', e => {
+              if (saveToLocal.get('theme') === undefined) {
+                e.matches ? activateDarkMode() : activateLightMode()
+              }
+            })
+          } else {
+            theme === 'light' ? activateLightMode() : activateDarkMode()
+          }
+        
+      
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":true,"top_n_per_article":-1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: true,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: true
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/about-custom.css"><link rel="stylesheet" href="/css/theme-skin.css?v=5"><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="LuminDream's Blogs" type="application/atom+xml">
+</head><body><div class="bg-animation" id="web_bg"></div><script>(() => {
+  const arr = ["background-image: url(/images/pic_bg1.png);","background-image: url(/images/pic_bg2.png);","background-image: url(/images/pic_bg3.png);"]
+  const webBgDiv = document.getElementById('web_bg')
+
+  const setRandomBg = () => {
+    webBgDiv.style = arr[Math.floor(Math.random() * arr.length)]
+    requestAnimationFrame(() => webBgDiv.classList.add('bg-animation'))
+  }
+
+  document.addEventListener('pjax:send', () => {
+    webBgDiv.style = ''
+    webBgDiv.classList.remove('bg-animation')
+  })
+
+  document.addEventListener('pjax:complete', setRandomBg)
+  document.addEventListener('DOMContentLoaded', setRandomBg)
+})()
+</script><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/images/pic_touxiang.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/ loading='lazy'></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">39</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">49</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">4</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group hide"><i class="fa-fw fas fa-book"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/projects/"><i class="fa-fw fas fa-code"></i><span> 项目</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-heart"></i><span> 生活</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/essay/"><i class="fa-fw fas fa-pen-fancy"></i><span> 随笔</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="not-top-img fixed" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><img class="site-icon" src="/images/pic_blogweb.png" alt="Logo" loading='lazy'><span class="site-name">LuminDream's Blogs</span></a><a class="nav-page-title" href="/"><span class="site-name">Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group hide"><i class="fa-fw fas fa-book"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/projects/"><i class="fa-fw fas fa-code"></i><span> 项目</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-heart"></i><span> 生活</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/essay/"><i class="fa-fw fas fa-pen-fancy"></i><span> 随笔</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav></header><main class="layout" id="content-inner"><div id="post"><div id="post-info"><h1 class="post-title">Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="fa-fw post-meta-icon far fa-calendar-alt"></i><span class="post-meta-label">发表于</span><time datetime="2023-09-20T02:00:00.000Z" title="发表于 2023-09-20 10:00:00">2023-09-20</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E8%BF%90%E7%BB%B4/">计算机运维</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">1.8k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>6分钟</span></span></div></div></div><article class="container post-content" id="article-container"><h1 id="Tomcat-集群实战：Nginx-负载均衡、Redis-会话共享与故障排查"><a href="#Tomcat-集群实战：Nginx-负载均衡、Redis-会话共享与故障排查" class="headerlink" title="Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查"></a>Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查</h1><p>单台 Tomcat 上线第一周就暴露了问题：一次发版重启，业务断了十几分钟；访问量一上来，CPU 直接顶到 100%。趁着业务还在爬坡期，把架构从单节点扩成了两节点集群——过程里踩的坑，比配置本身值得记录得多。</p>
+<h2 id="一、从单机到两节点"><a href="#一、从单机到两节点" class="headerlink" title="一、从单机到两节点"></a>一、从单机到两节点</h2><p>目标拓扑很常规：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">用户 → Nginx(lb01) → upstream → web01 / web02 (Tomcat)</span><br><span class="line">                          └──→ NFS 共享静态资源</span><br><span class="line">                          └──→ Redis 会话存储</span><br></pre></td></tr></table></figure>
+
+<p>新节点的部署不是重装一遍，而是从老节点复制（前提是上一步的目录规范做得好）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># web01 上把程序目录和 systemd 配置推到 web02</span></span><br><span class="line">scp -rp /soft 172.18.1.8:/</span><br><span class="line">scp /usr/lib/systemd/system/tomcat.service 172.18.1.8:/usr/lib/systemd/system/</span><br><span class="line"></span><br><span class="line"><span class="comment"># web02 上建立软链接、重载并启动</span></span><br><span class="line"><span class="built_in">ln</span> -s /soft/apache-tomcat-9.0.34/ /soft/tomcat</span><br><span class="line">systemctl daemon-reload &amp;&amp; systemctl start tomcat &amp;&amp; systemctl <span class="built_in">enable</span> tomcat</span><br></pre></td></tr></table></figure>
+
+<h3 id="静态资源要共享，不然图片”时有时无”"><a href="#静态资源要共享，不然图片”时有时无”" class="headerlink" title="静态资源要共享，不然图片”时有时无”"></a>静态资源要共享，不然图片”时有时无”</h3><p>博客系统有上传目录（附件、头像），如果两个节点各存各的，用户刷新一下换到另一台机器，图片就 404。解决办法是所有节点挂载同一个 NFS 目录：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># NFS 服务端</span></span><br><span class="line"><span class="built_in">cat</span> /etc/exports</span><br><span class="line">/data/zrlog 172.18.1.0/24(rw,<span class="built_in">sync</span>,all_squash,anonuid=666,anongid=666)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 所有 web 节点挂载到应用的附件目录</span></span><br><span class="line">mount -t nfs 172.18.1.31:/data/zrlog /zrlog/ROOT/attached/</span><br><span class="line"><span class="built_in">echo</span> <span class="string">&quot;172.18.1.31:/data/zrlog /zrlog/ROOT/attached nfs defaults 0 0&quot;</span> &gt;&gt; /etc/fstab</span><br></pre></td></tr></table></figure>
+
+<p>注意 <code>anonuid/anongid=666</code> 要跟 Web 运行用户的 uid&#x2F;gid 对上，否则写文件会报权限拒绝——这是挂载 NFS 共享上传目录最常见的坑。</p>
+<h3 id="Nginx-侧接入"><a href="#Nginx-侧接入" class="headerlink" title="Nginx 侧接入"></a>Nginx 侧接入</h3><figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># /etc/nginx/conf.d/proxy_zrlog.conf</span></span><br><span class="line"><span class="section">upstream</span> zrlog &#123;</span><br><span class="line">    <span class="attribute">server</span> <span class="number">172.18.1.7:8080</span>;</span><br><span class="line">    <span class="attribute">server</span> <span class="number">172.18.1.8:8080</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="section">server</span> &#123;</span><br><span class="line">    <span class="attribute">listen</span> <span class="number">80</span>;</span><br><span class="line">    <span class="attribute">server_name</span> blog.example.com;</span><br><span class="line"></span><br><span class="line">    <span class="section">location</span> / &#123;</span><br><span class="line">        <span class="attribute">proxy_pass</span> http://zrlog;</span><br><span class="line">        <span class="attribute">include</span> proxy_params;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>proxy_params</code> 是我单独维护的公共代理参数文件，所有代理站点统一 include：</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="attribute">proxy_set_header</span> Host <span class="variable">$http_host</span>;</span><br><span class="line"><span class="attribute">proxy_set_header</span> X-Real-IP <span class="variable">$remote_addr</span>;</span><br><span class="line"><span class="attribute">proxy_set_header</span> X-Forwarded-For <span class="variable">$proxy_add_x_forwarded_for</span>;</span><br><span class="line"><span class="attribute">proxy_http_version</span> <span class="number">1</span>.<span class="number">1</span>;</span><br><span class="line"><span class="attribute">proxy_connect_timeout</span> <span class="number">30</span>;</span><br><span class="line"><span class="attribute">proxy_send_timeout</span> <span class="number">60</span>;</span><br><span class="line"><span class="attribute">proxy_read_timeout</span> <span class="number">60</span>;</span><br><span class="line"><span class="attribute">proxy_buffering</span> <span class="literal">on</span>;</span><br><span class="line"><span class="attribute">proxy_buffer_size</span> <span class="number">32k</span>;</span><br><span class="line"><span class="attribute">proxy_buffers</span> <span class="number">4</span> <span class="number">128k</span>;</span><br></pre></td></tr></table></figure>
+
+<p>有个细节值得说：Nginx 默认会把请求头里的 <code>Host</code> 改写成 <code>$proxy_host</code>（也就是 upstream 里写的名字或 IP）。所以不管后端是 Tomcat 还是 Nginx，只要不显式透传，后端日志里看到的 Host 都可能不是用户实际访问的域名。想让后端保留真实域名，必须显式配置 <code>proxy_set_header Host $http_host</code>——这也是 <code>proxy_params</code> 第一行的由来。</p>
+<h2 id="二、HTTPS-接入：证书放在哪一层"><a href="#二、HTTPS-接入：证书放在哪一层" class="headerlink" title="二、HTTPS 接入：证书放在哪一层"></a>二、HTTPS 接入：证书放在哪一层</h2><p>证书统一放在负载均衡层，后端继续跑 HTTP，这样证书只维护一份：</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">server</span> &#123;</span><br><span class="line">    <span class="attribute">listen</span> <span class="number">443</span> ssl;</span><br><span class="line">    <span class="attribute">server_name</span> blog.example.com;</span><br><span class="line">    <span class="attribute">ssl_certificate</span>     ssl_key/server.crt;</span><br><span class="line">    <span class="attribute">ssl_certificate_key</span> ssl_key/server.key;</span><br><span class="line"></span><br><span class="line">    <span class="section">location</span> / &#123;</span><br><span class="line">        <span class="attribute">proxy_pass</span> http://zrlog;</span><br><span class="line">        <span class="attribute">include</span> proxy_params;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="section">server</span> &#123;</span><br><span class="line">    <span class="attribute">listen</span> <span class="number">80</span>;</span><br><span class="line">    <span class="attribute">server_name</span> blog.example.com;</span><br><span class="line">    <span class="attribute">return</span> <span class="number">302</span> https://<span class="variable">$server_name</span><span class="variable">$request_uri</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="三、会话保持：轮询之后，用户开始”随机掉登录”"><a href="#三、会话保持：轮询之后，用户开始”随机掉登录”" class="headerlink" title="三、会话保持：轮询之后，用户开始”随机掉登录”"></a>三、会话保持：轮询之后，用户开始”随机掉登录”</h2><p>这一节是这次扩容最大的教训。</p>
+<p>两台 Tomcat 配好轮询之后，问题来了：<strong>用户登录后刷新页面，经常又跳回登录页</strong>。原因是默认的会话（session）存在单机的内存里——第一次请求落到 web01，session 存在 web01；下一次请求被轮询到 web02，web02 不认识这个 session，就当未登录处理。</p>
+<p>会话保持的几种方案，我们对比过：</p>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>原理</th>
+<th>问题</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ip_hash</td>
+<td>按客户端 IP 固定后端</td>
+<td>出口 IP 相同的用户全压一台；节点故障时登录态丢失</td>
+</tr>
+<tr>
+<td>session 复制</td>
+<td>Tomcat 集群自动同步 session</td>
+<td>节点超过 4 个性能急剧下降</td>
+</tr>
+<tr>
+<td>统一会话存储</td>
+<td>session 存 Redis&#x2F;MySQL</td>
+<td>需要改造，但最稳</td>
+</tr>
+</tbody></table>
+<p>生产上选的是 Redis：多台 Tomcat 共享一份会话数据，任意节点宕机，用户换到另一台照样是登录状态。</p>
+<h3 id="接入步骤"><a href="#接入步骤" class="headerlink" title="接入步骤"></a>接入步骤</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1. 下载 tomcat-cluster-redis-session-manager（开源项目，GitHub 可搜）</span></span><br><span class="line">wget https://github.com/ran-jit/tomcat-cluster-redis-session-manager/releases/download/4.0/tomcat-cluster-redis-session-manager.zip</span><br><span class="line">unzip tomcat-cluster-redis-session-manager.zip</span><br><span class="line"></span><br><span class="line"><span class="comment"># 2. jar 包进 Tomcat 的 lib</span></span><br><span class="line"><span class="built_in">cp</span> tomcat-cluster-redis-session-manager/lib/* /soft/tomcat/lib/</span><br><span class="line"></span><br><span class="line"><span class="comment"># 3. 配置文件进 Tomcat 的 conf，改 Redis 地址</span></span><br><span class="line"><span class="built_in">cp</span> tomcat-cluster-redis-session-manager/conf/redis-data-cache.properties /soft/tomcat/conf/</span><br><span class="line">vim /soft/tomcat/conf/redis-data-cache.properties</span><br><span class="line">redis.hosts=172.18.1.51:6379</span><br><span class="line"></span><br><span class="line"><span class="comment"># 4. 在 conf/context.xml 的 &lt;/Context&gt; 前加两行</span></span><br><span class="line">&lt;Valve className=<span class="string">&quot;tomcat.request.session.redis.SessionHandlerValve&quot;</span> /&gt;</span><br><span class="line">&lt;Manager className=<span class="string">&quot;tomcat.request.session.redis.SessionManager&quot;</span> /&gt;</span><br></pre></td></tr></table></figure>
+
+<p>改完一台，用 rsync 无差异同步到另一台，再重启 Tomcat。升级后的效果：随便停哪台节点，用户无感知，请求被自动转到另一台。</p>
+<blockquote>
+<p>一定记得让两个节点的配置完全一致——session 序列化方式、jar 版本只要有一点不同，就会出现”这台能登录、那台报错”的诡异现象。</p>
+</blockquote>
+<h2 id="四、故障排查实战"><a href="#四、故障排查实战" class="headerlink" title="四、故障排查实战"></a>四、故障排查实战</h2><p>集群跑稳之后，值班时遇到的高频故障就是这几类，逐个记一下排查路径。</p>
+<h3 id="1-启动失败：先看三件事"><a href="#1-启动失败：先看三件事" class="headerlink" title="1. 启动失败：先看三件事"></a>1. 启动失败：先看三件事</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1) 服务状态</span></span><br><span class="line">systemctl status tomcat</span><br><span class="line"><span class="comment"># 2) 启动日志（最直接）</span></span><br><span class="line"><span class="built_in">tail</span> -100 /usr/local/tomcat/logs/catalina.out</span><br><span class="line"><span class="comment"># 3) 实在看不出，前台启动看完整报错</span></span><br><span class="line">/usr/local/tomcat/bin/catalina.sh run</span><br></pre></td></tr></table></figure>
+
+<p>高频原因就三个：端口被占（<code>Address already in use</code>，<code>ss -ntlp | grep 8080</code> 找进程）、<code>JAVA_HOME</code> 没配好、war 包本身有问题。启动成功后的验证动作：<code>ss -lntp | grep 8080 &amp;&amp; curl -I http://127.0.0.1:8080</code>。</p>
+<h3 id="2-CPU-100-：从进程找到那行代码"><a href="#2-CPU-100-：从进程找到那行代码" class="headerlink" title="2. CPU 100%：从进程找到那行代码"></a>2. CPU 100%：从进程找到那行代码</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">top -c                  <span class="comment"># 找到最耗 CPU 的 java 进程</span></span><br><span class="line">top -Hp &lt;PID&gt;           <span class="comment"># 进程内按线程排序，记下最高的线程号</span></span><br><span class="line"><span class="built_in">printf</span> <span class="string">&#x27;%x\n&#x27;</span> 12345     <span class="comment"># 转成十六进制，jstack 里线程 ID 是这个格式</span></span><br><span class="line">jstack &lt;PID&gt; | grep -A 20 <span class="string">&quot;0x3039&quot;</span>   <span class="comment"># 直接看线程栈</span></span><br></pre></td></tr></table></figure>
+
+<p>栈顶如果是业务代码 → 大概率死循环，找开发修；如果是 GC 线程 → 回到堆内存问题。这套”进程 → 线程 → 栈”的路径，比看监控图猜要快得多。</p>
+<h3 id="3-响应慢-线程池满：先看访问日志的耗时"><a href="#3-响应慢-线程池满：先看访问日志的耗时" class="headerlink" title="3. 响应慢 &#x2F; 线程池满：先看访问日志的耗时"></a>3. 响应慢 &#x2F; 线程池满：先看访问日志的耗时</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 访问日志里 %D 字段是耗时（微秒），超过 3 秒的单独看</span></span><br><span class="line">awk <span class="string">&#x27;&#123;if ($NF &gt; 3000000) print&#125;&#x27;</span> /usr/local/tomcat/logs/localhost_access_log.*.txt | <span class="built_in">tail</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 看线程池状态</span></span><br><span class="line">jstack &lt;PID&gt; | grep <span class="string">&quot;http-nio&quot;</span> | <span class="built_in">wc</span> -l      <span class="comment"># 活跃 HTTP 线程数</span></span><br><span class="line">jstack &lt;PID&gt; | grep -c <span class="string">&quot;RUNNABLE&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>线程数长期贴着 <code>maxThreads</code>、大量线程 <code>BLOCKED</code>，就是线程池打满的信号。往下追通常是慢 SQL 或者第三方接口没设超时——这两个占我们遇到的慢请求原因的一大半。</p>
+<h2 id="五、复盘"><a href="#五、复盘" class="headerlink" title="五、复盘"></a>五、复盘</h2><p>这次集群改造最值钱的不是配置本身，而是暴露出来的两个认知：</p>
+<ol>
+<li><strong>有状态的服务不能无脑加节点</strong>——session、上传文件、本地缓存，任何”存在本机”的东西，都会在集群下变成故障源；</li>
+<li><strong>排查顺序固定下来能省时间</strong>——启动问题看日志、CPU 问题看线程栈、慢请求看耗时字段，先分类再动手，比上来就重启强。</li>
+</ol>
+<p>后来我们给集群加了两条约束：任何新服务上线前确认”状态是否外置”，发版必须逐节点滚动并验证，这两条规矩到现在没出过事故。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://www.lumindream.site">LuminDream</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://www.lumindream.site/2023/09/20/Tomcat%E9%9B%86%E7%BE%A4%E5%AE%9E%E6%88%98Nginx%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E4%B8%8ERedis%E4%BC%9A%E8%AF%9D%E5%85%B1%E4%BA%AB/">https://www.lumindream.site/2023/09/20/Tomcat%E9%9B%86%E7%BE%A4%E5%AE%9E%E6%88%98Nginx%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E4%B8%8ERedis%E4%BC%9A%E8%AF%9D%E5%85%B1%E4%BA%AB/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://www.lumindream.site" target="_blank">LuminDream's Blogs</a>！</span></div></div><div class="tag_share"></div><div class="post-reward"><div class="reward-button"><i class="fas fa-qrcode"></i>赞助</div><div class="reward-main"><ul class="reward-all"><li class="reward-item"><a href="/images/wx.png" target="_blank"><img class="post-qr-code-img" src="/images/wx.png" alt="微信"/ loading='lazy'></a><div class="post-qr-code-desc">微信</div></li><li class="reward-item"><a href="/images/zfb.jpg" target="_blank"><img class="post-qr-code-img" src="/images/zfb.jpg" alt="支付宝"/ loading='lazy'></a><div class="post-qr-code-desc">支付宝</div></li></ul></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2023/09/06/Tomcat%E9%83%A8%E7%BD%B2%E4%B8%8EJVM%E8%B0%83%E4%BC%98%E5%AE%9E%E6%88%98/" title="Tomcat 部署与 JVM 调优实战：从安装到生产基线"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">Tomcat 部署与 JVM 调优实战：从安装到生产基线</div></div><div class="info-2"><div class="info-item-1">Tomcat 部署与 JVM 调优实战：从安装到生产基线第一次独立接手 Java 应用时，开发只丢过来一个 war 包和一句”部署到服务器上”，剩下的全是我自己的事：装什么环境、配哪些参数、日志放哪、内存给多少。Tomcat 本身不难装，难的是把它调到一个”生产敢用”的状态——这套配置后来成了我部署所有 Java 应用的标准动作。 一、先弄清楚 Tomcat 在生产里的位置Tomcat 是 Servlet 容器，Java 应用跑在它里面。类比一下：PHP 站点要 Nginx 配 PHP-FPM 才能跑，Java 应用就需要 Tomcat 这个容器。 它自己带 HTTP 服务能力（默认 8080），但静态文件处理比 Nginx 差得远，所以生产上标准姿势是：  用户请求 → Nginx（80&#x2F;443）→ Tomcat（8080）； 静态资源（图片、CSS、JS）Nginx 直接返回，动态请求才转发给 Tomcat； 8080 端口只对内网负载均衡节点开放，绝不对公网暴露。  这里有个我踩过的坑：最初图省事直接把 8080 开到公网，扫描器几天就找上门了——Tomcat 的...</div></div></div></a><a class="pagination-related" href="/2023/10/11/Nginx%E9%85%8D%E7%BD%AE%E4%B8%8E%E6%97%A5%E5%BF%97%E5%AE%9E%E6%88%98/" title="Nginx 配置与日志实战：从配置文件结构到 rewrite 规则"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">Nginx 配置与日志实战：从配置文件结构到 rewrite 规则</div></div><div class="info-2"><div class="info-item-1">Nginx 配置与日志实战：从配置文件结构到 rewrite 规则接手公司几台 Web 服务器时，我看到的第一样东西是：nginx.conf 被改过几十版，十几个站点全堆在一个文件里，日志统一写在一个 access.log。改一次配置要在一千多行里翻半天——那次改造是从”把配置理清楚”开始的。 一、安装：直接用官方源CentOS 默认源里的 Nginx 版本偏旧，配置写法也落后。用官方仓库装： 1cat /etc/yum.repos.d/nginx.repo  123456[nginx-stable]name=nginx stable repobaseurl=http://nginx.org/packages/centos/$releasever/$basearch/gpgcheck=1enabled=1gpgkey=https://nginx.org/keys/nginx_signing.key  123yum -y install nginxnginx -v       # nginx/1.24.0systemctl start nginx &amp;&amp; system...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2023/10/25/Nginx%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E4%B8%8E%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E5%AE%9E%E6%88%98/" title="Nginx 反向代理与负载均衡实战：upstream、真实 IP 与四层七层选型"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2023-10-25</div><div class="info-item-2">Nginx 反向代理与负载均衡实战：upstream、真实 IP 与四层七层选型</div></div><div class="info-2"><div class="info-item-1">Nginx 反向代理与负载均衡实战：upstream、真实 IP 与四层七层选型把后端从一台扩到多台只是加两个 IP 的事，真正麻烦的是加完之后冒出来的一堆问题：后端日志里全是负载均衡的 IP、出了 502 不知道该看哪张日志、两个后端”用户登录状态随机丢失”。这篇把反向代理和负载均衡这一层该配的东西整理一遍。 一、正代理和反代理，一句话分清区别在服务的对象：正向代理代理客户端（客户端主动配置代理，代表是翻墙工具和企业上网代理），反向代理代理服务端（客户端以为在直连，实际请求被 Nginx 转发给后端）。运维日常干的都是后者。 对后端的价值就三条：统一入口（后端扩缩容用户无感知）、分摊压力（多节点负载）、安全缓冲（后端不直接暴露公网，可在入口层做限流、WAF、HTTPS 卸载）。 二、proxy_pass 的参数才是关键最简配置一行就够，但那只是开始： 123location / &#123;    proxy_pass http://172.18.1.7:8080;&#125;  1. 请求头透传（不配就是给自己挖坑）1234proxy_set_header Host $htt...</div></div></div></a><a class="pagination-related" href="/2023/09/06/Tomcat%E9%83%A8%E7%BD%B2%E4%B8%8EJVM%E8%B0%83%E4%BC%98%E5%AE%9E%E6%88%98/" title="Tomcat 部署与 JVM 调优实战：从安装到生产基线"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2023-09-06</div><div class="info-item-2">Tomcat 部署与 JVM 调优实战：从安装到生产基线</div></div><div class="info-2"><div class="info-item-1">Tomcat 部署与 JVM 调优实战：从安装到生产基线第一次独立接手 Java 应用时，开发只丢过来一个 war 包和一句”部署到服务器上”，剩下的全是我自己的事：装什么环境、配哪些参数、日志放哪、内存给多少。Tomcat 本身不难装，难的是把它调到一个”生产敢用”的状态——这套配置后来成了我部署所有 Java 应用的标准动作。 一、先弄清楚 Tomcat 在生产里的位置Tomcat 是 Servlet 容器，Java 应用跑在它里面。类比一下：PHP 站点要 Nginx 配 PHP-FPM 才能跑，Java 应用就需要 Tomcat 这个容器。 它自己带 HTTP 服务能力（默认 8080），但静态文件处理比 Nginx 差得远，所以生产上标准姿势是：  用户请求 → Nginx（80&#x2F;443）→ Tomcat（8080）； 静态资源（图片、CSS、JS）Nginx 直接返回，动态请求才转发给 Tomcat； 8080 端口只对内网负载均衡节点开放，绝不对公网暴露。  这里有个我踩过的坑：最初图省事直接把 8080 开到公网，扫描器几天就找上门了——Tomcat 的...</div></div></div></a><a class="pagination-related" href="/2023/11/08/LNMP%E6%9E%B6%E6%9E%84%E5%AE%9E%E6%88%98%E6%95%B0%E6%8D%AE%E5%BA%93%E5%88%86%E7%A6%BB%E4%B8%8E%E5%8A%A8%E9%9D%99%E5%88%86%E7%A6%BB/" title="LNMP 架构实战：从单机搭建到数据库分离与动静分离"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2023-11-08</div><div class="info-item-2">LNMP 架构实战：从单机搭建到数据库分离与动静分离</div></div><div class="info-2"><div class="info-item-1">LNMP 架构实战：从单机搭建到数据库分离与动静分离公司官网最早是一个”大杂烩”单机：Nginx、PHP-FPM、MySQL 全挤在一台 4G 内存的服务器上。某次推广活动流量上来，MySQL 被系统 OOM Killer 干掉，网站挂了半小时。那次之后我们做了一轮架构拆分——这篇记录从单机 LNMP 到多节点分离的全过程。 一、先理清 LNMP 怎么跑LNMP &#x3D; Linux + Nginx + MySQL + PHP，请求链路是这样的： 123浏览器 → Nginx（静态文件直接返回）              └→ .php 请求经 FastCGI 交给 PHP-FPM 执行                     └→ PHP 连 MySQL 取数据 → 生成 HTML 返回  关键点是 Nginx 自己不执行 PHP，它把 .php 请求通过 FastCGI 协议转给 PHP-FPM 进程池处理。所以 Nginx 和 PHP-FPM 的”运行用户”必须一致，否则 PHP 读不到 Nginx 放的文件，这也是新手最常见的权限问题来源。 二、单机搭建1. Ngin...</div></div></div></a><a class="pagination-related" href="/2023/10/11/Nginx%E9%85%8D%E7%BD%AE%E4%B8%8E%E6%97%A5%E5%BF%97%E5%AE%9E%E6%88%98/" title="Nginx 配置与日志实战：从配置文件结构到 rewrite 规则"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2023-10-11</div><div class="info-item-2">Nginx 配置与日志实战：从配置文件结构到 rewrite 规则</div></div><div class="info-2"><div class="info-item-1">Nginx 配置与日志实战：从配置文件结构到 rewrite 规则接手公司几台 Web 服务器时，我看到的第一样东西是：nginx.conf 被改过几十版，十几个站点全堆在一个文件里，日志统一写在一个 access.log。改一次配置要在一千多行里翻半天——那次改造是从”把配置理清楚”开始的。 一、安装：直接用官方源CentOS 默认源里的 Nginx 版本偏旧，配置写法也落后。用官方仓库装： 1cat /etc/yum.repos.d/nginx.repo  123456[nginx-stable]name=nginx stable repobaseurl=http://nginx.org/packages/centos/$releasever/$basearch/gpgcheck=1enabled=1gpgkey=https://nginx.org/keys/nginx_signing.key  123yum -y install nginxnginx -v       # nginx/1.24.0systemctl start nginx &amp;&amp; system...</div></div></div></a><a class="pagination-related" href="/2023/11/22/Nginx%E9%AB%98%E5%8F%AF%E7%94%A8%E4%B8%8EHTTPS%E8%90%BD%E5%9C%B0/" title="Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2023-11-22</div><div class="info-item-2">Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战</div></div><div class="info-2"><div class="info-item-1">Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战大促前做架构巡检时发现一个致命问题：整条链路里 Nginx 入口只有一台，它一挂全站就没了。同时安全合规也要求全站上 HTTPS。两件事凑一起做了一次改造：双机主备入口 + 证书统一下放到入口层。这篇记录配置过程和几个只有实际部署才会遇到的坑。 一、Keepalived 怎么实现高可用Keepalived 基于 VRRP 协议做主备切换，核心是一台”虚拟路由器”：  两台机器（master&#x2F;backup）组成一个组，对外暴露一个虚拟 IP（VIP）； 域名解析指向 VIP； master 每秒发心跳，backup 收不到心跳就认为自己该接管，把 VIP 抢过来； 用户侧无感知——地址没变，只是背后换了台机器。  用户不用改任何配置，因为 VIP 和它的虚拟 MAC 在 ARP 缓存里是稳定的，这一点比”手动把 DNS 切到备机”可靠得多。 二、主备配置1yum install -y keepalived    # 两台都装  master（lb01）： 1cat /etc/keepa...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Tomcat-%E9%9B%86%E7%BE%A4%E5%AE%9E%E6%88%98%EF%BC%9ANginx-%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E3%80%81Redis-%E4%BC%9A%E8%AF%9D%E5%85%B1%E4%BA%AB%E4%B8%8E%E6%95%85%E9%9A%9C%E6%8E%92%E6%9F%A5"><span class="toc-number">1.</span> <span class="toc-text">Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E4%BB%8E%E5%8D%95%E6%9C%BA%E5%88%B0%E4%B8%A4%E8%8A%82%E7%82%B9"><span class="toc-number">1.1.</span> <span class="toc-text">一、从单机到两节点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E8%A6%81%E5%85%B1%E4%BA%AB%EF%BC%8C%E4%B8%8D%E7%84%B6%E5%9B%BE%E7%89%87%E2%80%9D%E6%97%B6%E6%9C%89%E6%97%B6%E6%97%A0%E2%80%9D"><span class="toc-number">1.1.1.</span> <span class="toc-text">静态资源要共享，不然图片”时有时无”</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Nginx-%E4%BE%A7%E6%8E%A5%E5%85%A5"><span class="toc-number">1.1.2.</span> <span class="toc-text">Nginx 侧接入</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81HTTPS-%E6%8E%A5%E5%85%A5%EF%BC%9A%E8%AF%81%E4%B9%A6%E6%94%BE%E5%9C%A8%E5%93%AA%E4%B8%80%E5%B1%82"><span class="toc-number">1.2.</span> <span class="toc-text">二、HTTPS 接入：证书放在哪一层</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E4%BC%9A%E8%AF%9D%E4%BF%9D%E6%8C%81%EF%BC%9A%E8%BD%AE%E8%AF%A2%E4%B9%8B%E5%90%8E%EF%BC%8C%E7%94%A8%E6%88%B7%E5%BC%80%E5%A7%8B%E2%80%9D%E9%9A%8F%E6%9C%BA%E6%8E%89%E7%99%BB%E5%BD%95%E2%80%9D"><span class="toc-number">1.3.</span> <span class="toc-text">三、会话保持：轮询之后，用户开始”随机掉登录”</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%A5%E5%85%A5%E6%AD%A5%E9%AA%A4"><span class="toc-number">1.3.1.</span> <span class="toc-text">接入步骤</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E6%95%85%E9%9A%9C%E6%8E%92%E6%9F%A5%E5%AE%9E%E6%88%98"><span class="toc-number">1.4.</span> <span class="toc-text">四、故障排查实战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%90%AF%E5%8A%A8%E5%A4%B1%E8%B4%A5%EF%BC%9A%E5%85%88%E7%9C%8B%E4%B8%89%E4%BB%B6%E4%BA%8B"><span class="toc-number">1.4.1.</span> <span class="toc-text">1. 启动失败：先看三件事</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-CPU-100-%EF%BC%9A%E4%BB%8E%E8%BF%9B%E7%A8%8B%E6%89%BE%E5%88%B0%E9%82%A3%E8%A1%8C%E4%BB%A3%E7%A0%81"><span class="toc-number">1.4.2.</span> <span class="toc-text">2. CPU 100%：从进程找到那行代码</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%93%8D%E5%BA%94%E6%85%A2-%E7%BA%BF%E7%A8%8B%E6%B1%A0%E6%BB%A1%EF%BC%9A%E5%85%88%E7%9C%8B%E8%AE%BF%E9%97%AE%E6%97%A5%E5%BF%97%E7%9A%84%E8%80%97%E6%97%B6"><span class="toc-number">1.4.3.</span> <span class="toc-text">3. 响应慢 &#x2F; 线程池满：先看访问日志的耗时</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E5%A4%8D%E7%9B%98"><span class="toc-number">1.5.</span> <span class="toc-text">五、复盘</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2025/08/28/%E5%BD%93AI%E8%B5%B0%E8%BF%9B%E8%BF%90%E7%BB%B4%E8%BF%99%E5%8D%8A%E5%B9%B4%E7%9A%84%E8%A7%82%E5%AF%9F%E4%B8%8E%E6%80%9D%E8%80%83/" title="当 AI 走进运维：这半年的观察与思考">当 AI 走进运维：这半年的观察与思考</a><time datetime="2025-08-28T02:00:00.000Z" title="发表于 2025-08-28 10:00:00">2025-08-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/08/27/AnsibleRoles%E4%B8%8EJinja2%E9%83%A8%E7%BD%B2%E5%89%A7%E6%9C%AC%E5%B7%A5%E7%A8%8B%E5%8C%96/" title="Ansible Roles 与 Jinja2：部署剧本工程化实战">Ansible Roles 与 Jinja2：部署剧本工程化实战</a><time datetime="2024-08-27T02:00:00.000Z" title="发表于 2024-08-27 10:00:00">2024-08-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/08/04/Ansible%E6%B5%81%E7%A8%8B%E6%8E%A7%E5%88%B6%E5%AE%9E%E6%88%98when%E5%BE%AA%E7%8E%AFhandlers%E4%B8%8E%E6%A0%87%E7%AD%BE/" title="Ansible 流程控制实战：when、循环、handlers 与标签">Ansible 流程控制实战：when、循环、handlers 与标签</a><time datetime="2024-08-04T02:00:00.000Z" title="发表于 2024-08-04 10:00:00">2024-08-04</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/07/16/AnsiblePlaybook%E4%B8%8E%E5%8F%98%E9%87%8F%E4%BD%93%E7%B3%BB%E5%AE%9E%E6%88%98/" title="Ansible Playbook 与变量体系实战">Ansible Playbook 与变量体系实战</a><time datetime="2024-07-16T02:00:00.000Z" title="发表于 2024-07-16 10:00:00">2024-07-16</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/06/23/Ansible%E5%B8%B8%E7%94%A8%E6%A8%A1%E5%9D%97%E5%AE%9E%E6%88%98%E4%BB%8E%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%88%B0%E6%95%B0%E6%8D%AE%E5%BA%93/" title="Ansible 常用模块实战：从软件包到数据库">Ansible 常用模块实战：从软件包到数据库</a><time datetime="2024-06-23T02:00:00.000Z" title="发表于 2024-06-23 10:00:00">2024-06-23</time></div></div></div></div></div></div></main><footer id="footer" style="background: transparent;"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2023 - 2026 By LuminDream</span></div><div class="footer_custom_text"><div class="site-runtime">此间小站 · 已相伴 <span id="site-runtime">点亮中</span></div></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.6.2"></script><script src="/js/main.js?v=5.6.2"></script><script src="/js/tw_cn.js?v=5.6.2"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.14/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page@5.2.0/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"></div><script>(function(){var s=new Date("2023-03-01T00:00:00+08:00");function p(n){return n<10?"0"+n:n}function tick(){var total=Math.floor((Date.now()-s)/1000),el=document.getElementById("site-runtime");if(el){el.textContent=Math.floor(total/86400)+" 天 "+p(Math.floor(total%86400/3600))+" 时 "+p(Math.floor(total%3600/60))+" 分 "+p(total%60)+" 秒"}}tick();setInterval(tick,1000)})();</script><canvas class="fireworks" mobile="false"></canvas><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/fireworks.min.js"></script><script defer="defer" id="fluttering_ribbon" mobile="true" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章..." type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.6.2"></script></div></div></body></html>

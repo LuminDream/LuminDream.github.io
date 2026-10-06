@@ -60,16 +60,42 @@
 
 .resume-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 22px;
+  flex-direction: column;
+  gap: 8px;
   font-size: 0.93em;
   color: var(--font-color, #555);
+}
+
+.resume-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
 }
 
 .resume-meta-item {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+.resume-meta-item i {
+  color: #49b1f5;
+  width: 1.05em;
+  text-align: center;
+}
+
+.resume-meta-item a {
+  color: #49b1f5;
+  text-decoration: none;
+}
+
+.resume-meta-item a:hover {
+  text-decoration: underline;
+}
+
+.resume-meta-sep {
+  color: #ccc;
 }
 
 /* ===== 板块标题 ===== */
@@ -87,6 +113,53 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.block-title i {
+  color: #49b1f5;
+  font-size: 0.85em;
+  width: 1.7em;
+  height: 1.7em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(73,177,245,0.12);
+  border-radius: 7px;
+  flex-shrink: 0;
+}
+
+/* ===== 联系方式（一行式，与教育背景同风格） ===== */
+.contact-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 0.95em;
+  color: var(--font-color, #444);
+  line-height: 1.8;
+}
+
+.contact-line .contact-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.contact-line i {
+  color: #49b1f5;
+}
+
+.contact-line a {
+  color: #49b1f5;
+  text-decoration: none;
+}
+
+.contact-line a:hover {
+  text-decoration: underline;
+}
+
+.contact-line .sep {
+  color: #ccc;
 }
 
 /* ===== 教育背景（一行） ===== */
@@ -193,6 +266,11 @@
   box-shadow: 0 4px 12px rgba(73,177,245,0.3);
 }
 
+.tag-item i {
+  width: 1.05em;
+  text-align: center;
+}
+
 /* ===== 联系方式 ===== */
 .contact-wrap {
   display: flex;
@@ -236,7 +314,9 @@
   color: #c8c8c8;
 }
 
-[data-theme="dark"] .edu-line .sep {
+[data-theme="dark"] .edu-line .sep,
+[data-theme="dark"] .contact-line .sep,
+[data-theme="dark"] .resume-meta-sep {
   color: #555;
 }
 
@@ -244,6 +324,10 @@
 [data-theme="dark"] .contact-btn {
   background: rgba(73,177,245,0.15);
   border-color: rgba(73,177,245,0.35);
+}
+
+[data-theme="dark"] .block-title i {
+  background: rgba(73,177,245,0.18);
 }
 
 /* ===== 移动端 ===== */

@@ -1,0 +1,293 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>LNMP 架构实战：从单机搭建到数据库分离与动静分离 | LuminDream's Blogs</title><meta name="author" content="LuminDream"><meta name="copyright" content="LuminDream"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="一台机器跑 Nginx+PHP+MySQL 迟早会出事：这篇记录 LNMP 从单机搭建、数据库拆到独立服务器、Web 扩到多节点、上传目录挂 NFS 共享，再到三种动静分离方案的落地过程。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="LNMP 架构实战：从单机搭建到数据库分离与动静分离">
+<meta property="og:url" content="https://www.lumindream.site/2023/11/08/LNMP%E6%9E%B6%E6%9E%84%E5%AE%9E%E6%88%98%E6%95%B0%E6%8D%AE%E5%BA%93%E5%88%86%E7%A6%BB%E4%B8%8E%E5%8A%A8%E9%9D%99%E5%88%86%E7%A6%BB/">
+<meta property="og:site_name" content="LuminDream&#39;s Blogs">
+<meta property="og:description" content="一台机器跑 Nginx+PHP+MySQL 迟早会出事：这篇记录 LNMP 从单机搭建、数据库拆到独立服务器、Web 扩到多节点、上传目录挂 NFS 共享，再到三种动静分离方案的落地过程。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://www.lumindream.site/images/pic_touxiang.png">
+<meta property="article:published_time" content="2023-11-08T02:00:00.000Z">
+<meta property="article:modified_time" content="2023-11-08T02:00:00.000Z">
+<meta property="article:author" content="LuminDream">
+<meta property="article:tag" content="LNMP">
+<meta property="article:tag" content="Nginx">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://www.lumindream.site/images/pic_touxiang.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "LNMP 架构实战：从单机搭建到数据库分离与动静分离",
+  "url": "https://www.lumindream.site/2023/11/08/LNMP%E6%9E%B6%E6%9E%84%E5%AE%9E%E6%88%98%E6%95%B0%E6%8D%AE%E5%BA%93%E5%88%86%E7%A6%BB%E4%B8%8E%E5%8A%A8%E9%9D%99%E5%88%86%E7%A6%BB/",
+  "image": "https://www.lumindream.site/images/pic_touxiang.png",
+  "datePublished": "2023-11-08T02:00:00.000Z",
+  "dateModified": "2023-11-08T02:00:00.000Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "LuminDream",
+      "url": "https://www.lumindream.site"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/images/pic_blogweb.png"><link rel="canonical" href="https://www.lumindream.site/2023/11/08/LNMP%E6%9E%B6%E6%9E%84%E5%AE%9E%E6%88%98%E6%95%B0%E6%8D%AE%E5%BA%93%E5%88%86%E7%A6%BB%E4%B8%8E%E5%8A%A8%E9%9D%99%E5%88%86%E7%A6%BB/"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><meta name="google-site-verification" content="google6fbb5e4d2b11068f"/><meta name="baidu-site-verification" content="codeva-Wf0ZuoEmLd"/><link rel="stylesheet" href="/css/index.css?v=5.6.2"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.14/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d1f17')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          const mediaQueryDark = window.matchMedia('(prefers-color-scheme: dark)')
+          const mediaQueryLight = window.matchMedia('(prefers-color-scheme: light)')
+
+          if (theme === undefined) {
+            if (mediaQueryLight.matches) activateLightMode()
+            else if (mediaQueryDark.matches) activateDarkMode()
+            else {
+              const hour = new Date().getHours()
+              const start = 6
+              const end = 18
+              const isNight =
+                start < end
+                    ? hour < start || hour >= end
+                    : hour >= start || hour < end
+              isNight ? activateDarkMode() : activateLightMode()
+            }
+            mediaQueryDark.addEventListener('change', e => {
+              if (saveToLocal.get('theme') === undefined) {
+                e.matches ? activateDarkMode() : activateLightMode()
+              }
+            })
+          } else {
+            theme === 'light' ? activateLightMode() : activateDarkMode()
+          }
+        
+      
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":true,"top_n_per_article":-1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: true,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: true
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'LNMP 架构实战：从单机搭建到数据库分离与动静分离',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/about-custom.css"><link rel="stylesheet" href="/css/theme-skin.css?v=5"><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="LuminDream's Blogs" type="application/atom+xml">
+</head><body><div class="bg-animation" id="web_bg"></div><script>(() => {
+  const arr = ["background-image: url(/images/pic_bg1.png);","background-image: url(/images/pic_bg2.png);","background-image: url(/images/pic_bg3.png);"]
+  const webBgDiv = document.getElementById('web_bg')
+
+  const setRandomBg = () => {
+    webBgDiv.style = arr[Math.floor(Math.random() * arr.length)]
+    requestAnimationFrame(() => webBgDiv.classList.add('bg-animation'))
+  }
+
+  document.addEventListener('pjax:send', () => {
+    webBgDiv.style = ''
+    webBgDiv.classList.remove('bg-animation')
+  })
+
+  document.addEventListener('pjax:complete', setRandomBg)
+  document.addEventListener('DOMContentLoaded', setRandomBg)
+})()
+</script><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/images/pic_touxiang.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/ loading='lazy'></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">39</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">49</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">4</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group hide"><i class="fa-fw fas fa-book"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/projects/"><i class="fa-fw fas fa-code"></i><span> 项目</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-heart"></i><span> 生活</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/essay/"><i class="fa-fw fas fa-pen-fancy"></i><span> 随笔</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="not-top-img fixed" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><img class="site-icon" src="/images/pic_blogweb.png" alt="Logo" loading='lazy'><span class="site-name">LuminDream's Blogs</span></a><a class="nav-page-title" href="/"><span class="site-name">LNMP 架构实战：从单机搭建到数据库分离与动静分离</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group hide"><i class="fa-fw fas fa-book"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/projects/"><i class="fa-fw fas fa-code"></i><span> 项目</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-heart"></i><span> 生活</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/essay/"><i class="fa-fw fas fa-pen-fancy"></i><span> 随笔</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav></header><main class="layout" id="content-inner"><div id="post"><div id="post-info"><h1 class="post-title">LNMP 架构实战：从单机搭建到数据库分离与动静分离</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="fa-fw post-meta-icon far fa-calendar-alt"></i><span class="post-meta-label">发表于</span><time datetime="2023-11-08T02:00:00.000Z" title="发表于 2023-11-08 10:00:00">2023-11-08</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E8%BF%90%E7%BB%B4/">计算机运维</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">2k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>8分钟</span></span></div></div></div><article class="container post-content" id="article-container"><h1 id="LNMP-架构实战：从单机搭建到数据库分离与动静分离"><a href="#LNMP-架构实战：从单机搭建到数据库分离与动静分离" class="headerlink" title="LNMP 架构实战：从单机搭建到数据库分离与动静分离"></a>LNMP 架构实战：从单机搭建到数据库分离与动静分离</h1><p>公司官网最早是一个”大杂烩”单机：Nginx、PHP-FPM、MySQL 全挤在一台 4G 内存的服务器上。某次推广活动流量上来，MySQL 被系统 OOM Killer 干掉，网站挂了半小时。那次之后我们做了一轮架构拆分——这篇记录从单机 LNMP 到多节点分离的全过程。</p>
+<h2 id="一、先理清-LNMP-怎么跑"><a href="#一、先理清-LNMP-怎么跑" class="headerlink" title="一、先理清 LNMP 怎么跑"></a>一、先理清 LNMP 怎么跑</h2><p>LNMP &#x3D; Linux + Nginx + MySQL + PHP，请求链路是这样的：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">浏览器 → Nginx（静态文件直接返回）</span><br><span class="line">              └→ .php 请求经 FastCGI 交给 PHP-FPM 执行</span><br><span class="line">                     └→ PHP 连 MySQL 取数据 → 生成 HTML 返回</span><br></pre></td></tr></table></figure>
+
+<p>关键点是 <strong>Nginx 自己不执行 PHP</strong>，它把 <code>.php</code> 请求通过 FastCGI 协议转给 PHP-FPM 进程池处理。所以 Nginx 和 PHP-FPM 的”运行用户”必须一致，否则 PHP 读不到 Nginx 放的文件，这也是新手最常见的权限问题来源。</p>
+<h2 id="二、单机搭建"><a href="#二、单机搭建" class="headerlink" title="二、单机搭建"></a>二、单机搭建</h2><h3 id="1-Nginx-与统一用户"><a href="#1-Nginx-与统一用户" class="headerlink" title="1. Nginx 与统一用户"></a>1. Nginx 与统一用户</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 安装 Nginx（官方源，见前文）</span></span><br><span class="line">yum install nginx -y</span><br><span class="line"></span><br><span class="line"><span class="comment"># 建统一运行用户</span></span><br><span class="line">groupadd www -g 666</span><br><span class="line">useradd www -u 666 -g 666 -s /sbin/nologin -M</span><br><span class="line">sed -i <span class="string">&#x27;/^user/c user www;&#x27;</span> /etc/nginx/nginx.conf</span><br><span class="line">systemctl start nginx &amp;&amp; systemctl <span class="built_in">enable</span> nginx</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-PHP-FPM"><a href="#2-PHP-FPM" class="headerlink" title="2. PHP-FPM"></a>2. PHP-FPM</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 用第三方源装 PHP 7.1（CentOS 7 自带版本太旧）</span></span><br><span class="line">yum -y install php71w php71w-cli php71w-common php71w-gd php71w-mbstring \</span><br><span class="line">  php71w-pdo php71w-xml php71w-fpm php71w-mysqlnd php71w-opcache --nogpgcheck</span><br><span class="line"></span><br><span class="line"><span class="comment"># 让 PHP-FPM 也用 www 用户（和 Nginx 保持一致）</span></span><br><span class="line">sed -i <span class="string">&#x27;/^user/c user = www&#x27;</span> /etc/php-fpm.d/www.conf</span><br><span class="line">sed -i <span class="string">&#x27;/^group/c group = www&#x27;</span> /etc/php-fpm.d/www.conf</span><br><span class="line">systemctl start php-fpm &amp;&amp; systemctl <span class="built_in">enable</span> php-fpm</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-MySQL（MariaDB）"><a href="#3-MySQL（MariaDB）" class="headerlink" title="3. MySQL（MariaDB）"></a>3. MySQL（MariaDB）</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">yum install mariadb-server -y</span><br><span class="line">systemctl start mariadb &amp;&amp; systemctl <span class="built_in">enable</span> mariadb</span><br><span class="line">mysqladmin password <span class="string">&#x27;App@123&#x27;</span>          <span class="comment"># 给 root 设初始密码</span></span><br><span class="line">mysql -uroot -p<span class="string">&#x27;App@123&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="4-Nginx-侧接入-FastCGI"><a href="#4-Nginx-侧接入-FastCGI" class="headerlink" title="4. Nginx 侧接入 FastCGI"></a>4. Nginx 侧接入 FastCGI</h3><figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># /etc/nginx/conf.d/php.example.com.conf</span></span><br><span class="line"><span class="section">server</span> &#123;</span><br><span class="line">    <span class="attribute">listen</span> <span class="number">80</span>;</span><br><span class="line">    <span class="attribute">server_name</span> php.example.com;</span><br><span class="line">    <span class="attribute">root</span> /code;</span><br><span class="line">    <span class="attribute">index</span> index.php index.html;</span><br><span class="line"></span><br><span class="line">    <span class="section">location</span> <span class="regexp">~ \.php$</span> &#123;</span><br><span class="line">        <span class="attribute">root</span> /code;</span><br><span class="line">        <span class="attribute">fastcgi_pass</span> <span class="number">127.0.0.1:9000</span>;</span><br><span class="line">        <span class="attribute">fastcgi_param</span> SCRIPT_FILENAME <span class="variable">$document_root</span><span class="variable">$fastcgi_script_name</span>;</span><br><span class="line">        <span class="attribute">include</span> fastcgi_params;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>写两个测试文件验证：<code>info.php</code>（phpinfo）确认 PHP 通了；<code>mysqli.php</code> 确认 PHP 能连数据库：</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line">    <span class="variable">$servername</span> = <span class="string">&quot;localhost&quot;</span>;</span><br><span class="line">    <span class="variable">$username</span> = <span class="string">&quot;root&quot;</span>;</span><br><span class="line">    <span class="variable">$password</span> = <span class="string">&quot;App@123&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="variable">$conn</span> = <span class="title function_ invoke__">mysqli_connect</span>(<span class="variable">$servername</span>, <span class="variable">$username</span>, <span class="variable">$password</span>);</span><br><span class="line">    <span class="keyword">if</span> (!<span class="variable">$conn</span>) &#123;</span><br><span class="line">        <span class="keyword">die</span>(<span class="string">&quot;Connection failed: &quot;</span> . <span class="title function_ invoke__">mysqli_connect_error</span>());</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">echo</span> <span class="string">&quot;PHP 连接 MySQL 正常&quot;</span>;</span><br><span class="line"><span class="meta">?&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>两个页面都通了，LNMP 基础环境就算立住了。</p>
+<blockquote>
+<p>这里有个常见的白页问题：<code>phpinfo()</code> 打开一片空白，八成是 <code>fastcgi_pass</code> 指向的 PHP-FPM 没起，或者 <code>SCRIPT_FILENAME</code> 拼错导致 PHP 找不到文件。先看 Nginx error.log，再确认 <code>systemctl status php-fpm</code>。</p>
+</blockquote>
+<h2 id="三、数据库分离：把-OOM-的根因拆掉"><a href="#三、数据库分离：把-OOM-的根因拆掉" class="headerlink" title="三、数据库分离：把 OOM 的根因拆掉"></a>三、数据库分离：把 OOM 的根因拆掉</h2><p>单机的隐患在于：PHP-FPM 和 MySQL 抢内存，MySQL 往往是那个被系统杀掉的（<code>OOM Killer</code> 优先杀内存占用大的进程）。把数据库拆到独立服务器：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1) web 侧全库备份导出</span></span><br><span class="line">mysqldump -uroot -p<span class="string">&#x27;App@123&#x27;</span> -A &gt; mysql-all.sql</span><br><span class="line">scp mysql-all.sql root@172.18.1.51:/tmp</span><br><span class="line"></span><br><span class="line"><span class="comment"># 2) db01 上安装数据库并导入</span></span><br><span class="line">yum install mariadb mariadb-server -y</span><br><span class="line">systemctl start mariadb &amp;&amp; systemctl <span class="built_in">enable</span> mariadb</span><br><span class="line">mysql -uroot -p<span class="string">&#x27;App@123&#x27;</span> &lt; /tmp/mysql-all.sql</span><br><span class="line"></span><br><span class="line"><span class="comment"># 3) 建业务账号（不用 root 连业务库），按网段授权</span></span><br><span class="line">mysql -uroot -p<span class="string">&#x27;App@123&#x27;</span></span><br><span class="line">mysql&gt; grant all on *.* to appuser@<span class="string">&#x27;172.18.1.%&#x27;</span> identified by <span class="string">&#x27;App@123&#x27;</span>;</span><br><span class="line">mysql&gt; flush privileges;</span><br></pre></td></tr></table></figure>
+
+<p>两头命名要保持一致：建库、建用户的操作细节，走之前跟开发对一遍——因为下一步就要改应用的数据库地址。</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># web 侧修改应用配置（以 WordPress 为例）</span></span><br><span class="line"><span class="title function_ invoke__">define</span>(<span class="string">&#x27;DB_NAME&#x27;</span>, <span class="string">&#x27;wordpress&#x27;</span>);</span><br><span class="line"><span class="title function_ invoke__">define</span>(<span class="string">&#x27;DB_USER&#x27;</span>, <span class="string">&#x27;appuser&#x27;</span>);</span><br><span class="line"><span class="title function_ invoke__">define</span>(<span class="string">&#x27;DB_PASSWORD&#x27;</span>, <span class="string">&#x27;App@123&#x27;</span>);</span><br><span class="line"><span class="title function_ invoke__">define</span>(<span class="string">&#x27;DB_HOST&#x27;</span>, <span class="string">&#x27;172.18.1.51&#x27;</span>);      <span class="comment"># 从 localhost 改为 db01</span></span><br></pre></td></tr></table></figure>
+
+<p>改完访问网站验证。这里有个偷懒但有效的小技巧：用 <code>grep -iR &quot;旧地址或旧密码&quot; /code --exclude-dir=cache</code> 全局扫一遍代码目录，防止漏掉某个配置文件——我们当时就漏了一个 wiki 系统的 <code>database.php</code>。</p>
+<h2 id="四、Web-扩到多节点"><a href="#四、Web-扩到多节点" class="headerlink" title="四、Web 扩到多节点"></a>四、Web 扩到多节点</h2><p>单台 Web 是另一个单点，扩容的思路是”复制一份，数据源统一”：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 新节点建用户、装 Nginx/PHP（可以先把 web01 的源配置拷过去）</span></span><br><span class="line">scp -rp root@172.18.1.7:/etc/yum.repos.d/* /etc/yum.repos.d/</span><br><span class="line">yum install nginx -y &amp;&amp; yum -y install php71w ...（同上）</span><br><span class="line"></span><br><span class="line"><span class="comment"># 配置与代码整体同步</span></span><br><span class="line">scp -rp root@172.18.1.7:/etc/nginx /etc/</span><br><span class="line">scp -rp root@172.18.1.7:/etc/php-fpm.d /etc/</span><br><span class="line"></span><br><span class="line"><span class="comment"># 代码包同步</span></span><br><span class="line">tar czf code.tar.gz /code &amp;&amp; scp code.tar.gz root@172.18.1.8:/tmp</span><br><span class="line">tar xf /tmp/code.tar.gz -C /</span><br></pre></td></tr></table></figure>
+
+<p>清单核对：Nginx 配置、PHP 配置、代码、运行用户、数据库地址——五项全对，节点才算”一样”。后面接负载均衡（前一篇讲过的 upstream），多节点就生效了。</p>
+<h2 id="五、上传目录挂-NFS：静态资源的一致性"><a href="#五、上传目录挂-NFS：静态资源的一致性" class="headerlink" title="五、上传目录挂 NFS：静态资源的一致性"></a>五、上传目录挂 NFS：静态资源的一致性</h2><p>多节点之后下一个问题立刻来：用户上传的图片只落在接收请求的那台机器上，轮询到另一台就 404。方案是加一台 NFS，把上传目录共享给所有 Web 节点：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># NFS 服务端</span></span><br><span class="line">yum install nfs-utils -y</span><br><span class="line"><span class="built_in">cat</span> /etc/exports</span><br><span class="line">/data/blog 172.18.1.0/24(rw,<span class="built_in">sync</span>,all_squash,anonuid=666,anongid=666)</span><br><span class="line"><span class="built_in">mkdir</span> -p /data/blog &amp;&amp; <span class="built_in">chown</span> -R www:www /data/</span><br><span class="line">systemctl restart nfs-server</span><br><span class="line"></span><br><span class="line"><span class="comment"># 各 Web 节点挂载到应用的上传目录</span></span><br><span class="line">yum install nfs-utils -y</span><br><span class="line">mount -t nfs 172.18.1.31:/data/blog /code/wordpress/wp-content/uploads/</span><br><span class="line"><span class="built_in">echo</span> <span class="string">&quot;172.18.1.31:/data/blog /code/wordpress/wp-content/uploads nfs defaults 0 0&quot;</span> &gt;&gt; /etc/fstab</span><br><span class="line">mount -a</span><br></pre></td></tr></table></figure>
+
+<p>挂载前先把原来本地的文件拷进共享目录（选资源最全的那台做源），否则用户会看到”老图片全裂了”这种诡异现象。</p>
+<h2 id="六、动静分离：三种落地方式"><a href="#六、动静分离：三种落地方式" class="headerlink" title="六、动静分离：三种落地方式"></a>六、动静分离：三种落地方式</h2><p>动静分离的意义：静态请求（图片、CSS、JS）由 Nginx 直接返回，动态请求（PHP&#x2F;JSP&#x2F;接口）才转后端。这样静态资源不吃后端资源，动态服务挂了静态页面也不受影响。</p>
+<h3 id="方式一：单机做（最简单的起步）"><a href="#方式一：单机做（最简单的起步）" class="headerlink" title="方式一：单机做（最简单的起步）"></a>方式一：单机做（最简单的起步）</h3><figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">server</span> &#123;</span><br><span class="line">    <span class="attribute">listen</span> <span class="number">80</span>;</span><br><span class="line">    <span class="attribute">server_name</span> www.example.com;</span><br><span class="line">    <span class="attribute">root</span> /code/wordpress;</span><br><span class="line"></span><br><span class="line">    <span class="section">location</span> <span class="regexp">~* \.(png|jpg|gif|css|js|mp4)$</span> &#123;</span><br><span class="line">        <span class="attribute">root</span> /code/wordpress/images;</span><br><span class="line">        <span class="attribute">expires</span> <span class="number">7d</span>;</span><br><span class="line">        <span class="attribute">access_log</span> <span class="literal">off</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="section">location</span> <span class="regexp">~ \.php$</span> &#123;</span><br><span class="line">        <span class="attribute">fastcgi_pass</span> <span class="number">127.0.0.1:9000</span>;</span><br><span class="line">        <span class="attribute">fastcgi_param</span> SCRIPT_FILENAME <span class="variable">$document_root</span><span class="variable">$fastcgi_script_name</span>;</span><br><span class="line">        <span class="attribute">include</span> fastcgi_params;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="方式二：静态一台、动态一台"><a href="#方式二：静态一台、动态一台" class="headerlink" title="方式二：静态一台、动态一台"></a>方式二：静态一台、动态一台</h3><p>静态资源单独给一台机器（或 CDN 源站），Nginx 上按后缀分流：</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 静态节点 web01</span></span><br><span class="line"><span class="section">server</span> &#123;</span><br><span class="line">    <span class="attribute">listen</span> <span class="number">80</span>;</span><br><span class="line">    <span class="attribute">server_name</span> pic.example.com;</span><br><span class="line">    <span class="attribute">root</span> /code;</span><br><span class="line">    <span class="section">location</span> <span class="regexp">~* .*\.(jpg|png|gif)$</span> &#123;</span><br><span class="line">        <span class="attribute">root</span> /code/images;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment"># 动态节点 web02 跑 Tomcat/PHP</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="方式三：在负载均衡上统一调度"><a href="#方式三：在负载均衡上统一调度" class="headerlink" title="方式三：在负载均衡上统一调度"></a>方式三：在负载均衡上统一调度</h3><p>入口层按请求类型分到不同 upstream，这是多节点场景的最终形态：</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">upstream</span> static &#123;</span><br><span class="line">    <span class="attribute">server</span> <span class="number">172.18.1.7:80</span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="section">upstream</span> java &#123;</span><br><span class="line">    <span class="attribute">server</span> <span class="number">172.18.1.8:8080</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="section">server</span> &#123;</span><br><span class="line">    <span class="attribute">listen</span> <span class="number">80</span>;</span><br><span class="line">    <span class="attribute">server_name</span> pic.example.com;</span><br><span class="line"></span><br><span class="line">    <span class="section">location</span> / &#123;</span><br><span class="line">        <span class="attribute">root</span> /code;</span><br><span class="line">        <span class="attribute">index</span> index.html;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="section">location</span> <span class="regexp">~* \.(jpg|png|gif)$</span> &#123;</span><br><span class="line">        <span class="attribute">proxy_pass</span> http://static;</span><br><span class="line">        <span class="attribute">proxy_set_header</span> Host <span class="variable">$http_host</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="section">location</span> <span class="regexp">~ \.jsp</span> &#123;</span><br><span class="line">        <span class="attribute">proxy_pass</span> http://java;</span><br><span class="line">        <span class="attribute">proxy_set_header</span> Host <span class="variable">$http_host</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="附：按客户端类型分流"><a href="#附：按客户端类型分流" class="headerlink" title="附：按客户端类型分流"></a>附：按客户端类型分流</h3><p>同一个域名按终端类型调度到不同资源，用 <code>$http_user_agent</code> 判断即可：</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">upstream</span> android &#123; <span class="attribute">server</span> <span class="number">172.18.1.7:9090</span>; &#125;</span><br><span class="line"><span class="section">upstream</span> iphone  &#123; <span class="attribute">server</span> <span class="number">172.18.1.7:9091</span>; &#125;</span><br><span class="line"><span class="section">upstream</span> pc      &#123; <span class="attribute">server</span> <span class="number">172.18.1.7:9092</span>; &#125;</span><br><span class="line"></span><br><span class="line"><span class="section">server</span> &#123;</span><br><span class="line">    <span class="attribute">listen</span> <span class="number">80</span>;</span><br><span class="line">    <span class="attribute">server_name</span> m.example.com;</span><br><span class="line">    <span class="attribute">charset</span> utf-<span class="number">8</span>;</span><br><span class="line"></span><br><span class="line">    <span class="section">location</span> / &#123;</span><br><span class="line">        <span class="attribute">if</span> (<span class="variable">$http_user_agent</span> <span class="regexp">~* &quot;Android&quot;)</span> &#123; <span class="attribute">proxy_pass</span> http://android; &#125;</span><br><span class="line">        <span class="attribute">if</span> (<span class="variable">$http_user_agent</span> <span class="regexp">~* &quot;Iphone&quot;)</span>  &#123; <span class="attribute">proxy_pass</span> http://iphone; &#125;</span><br><span class="line">        <span class="attribute">if</span> (<span class="variable">$http_user_agent</span> <span class="regexp">~* &quot;MSIE&quot;)</span>    &#123; <span class="attribute">return</span> <span class="number">403</span>; &#125;   <span class="comment"># 老 IE 直接拒绝</span></span><br><span class="line">        <span class="attribute">proxy_pass</span> http://pc;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>注意：<code>if</code> 在 location 里有”陷阱”，多条件场景建议用 <code>map</code> 指令提前算好变量，逻辑更清晰。</p>
+</blockquote>
+<h2 id="七、这套架构的复盘"><a href="#七、这套架构的复盘" class="headerlink" title="七、这套架构的复盘"></a>七、这套架构的复盘</h2><p>拆完之后的收益很直观：内存不再打架（数据库独占一台）、单台 Web 故障不影响整体、静态文件走共享存储和缓存后动态服务压力降了一大截。</p>
+<p>教训也有三条：数据库迁移前把连接配置”全局 grep 一遍”、NFS 挂载要进 fstab 并测试重启后自动挂载、扩容新节点时先对照老节点做配置差异清单。这三点做到位，架构拆分就是一次平稳的升级，而不是一场事故。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://www.lumindream.site">LuminDream</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://www.lumindream.site/2023/11/08/LNMP%E6%9E%B6%E6%9E%84%E5%AE%9E%E6%88%98%E6%95%B0%E6%8D%AE%E5%BA%93%E5%88%86%E7%A6%BB%E4%B8%8E%E5%8A%A8%E9%9D%99%E5%88%86%E7%A6%BB/">https://www.lumindream.site/2023/11/08/LNMP%E6%9E%B6%E6%9E%84%E5%AE%9E%E6%88%98%E6%95%B0%E6%8D%AE%E5%BA%93%E5%88%86%E7%A6%BB%E4%B8%8E%E5%8A%A8%E9%9D%99%E5%88%86%E7%A6%BB/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://www.lumindream.site" target="_blank">LuminDream's Blogs</a>！</span></div></div><div class="tag_share"></div><div class="post-reward"><div class="reward-button"><i class="fas fa-qrcode"></i>赞助</div><div class="reward-main"><ul class="reward-all"><li class="reward-item"><a href="/images/wx.png" target="_blank"><img class="post-qr-code-img" src="/images/wx.png" alt="微信"/ loading='lazy'></a><div class="post-qr-code-desc">微信</div></li><li class="reward-item"><a href="/images/zfb.jpg" target="_blank"><img class="post-qr-code-img" src="/images/zfb.jpg" alt="支付宝"/ loading='lazy'></a><div class="post-qr-code-desc">支付宝</div></li></ul></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2023/10/25/Nginx%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E4%B8%8E%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E5%AE%9E%E6%88%98/" title="Nginx 反向代理与负载均衡实战：upstream、真实 IP 与四层七层选型"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">Nginx 反向代理与负载均衡实战：upstream、真实 IP 与四层七层选型</div></div><div class="info-2"><div class="info-item-1">Nginx 反向代理与负载均衡实战：upstream、真实 IP 与四层七层选型把后端从一台扩到多台只是加两个 IP 的事，真正麻烦的是加完之后冒出来的一堆问题：后端日志里全是负载均衡的 IP、出了 502 不知道该看哪张日志、两个后端”用户登录状态随机丢失”。这篇把反向代理和负载均衡这一层该配的东西整理一遍。 一、正代理和反代理，一句话分清区别在服务的对象：正向代理代理客户端（客户端主动配置代理，代表是翻墙工具和企业上网代理），反向代理代理服务端（客户端以为在直连，实际请求被 Nginx 转发给后端）。运维日常干的都是后者。 对后端的价值就三条：统一入口（后端扩缩容用户无感知）、分摊压力（多节点负载）、安全缓冲（后端不直接暴露公网，可在入口层做限流、WAF、HTTPS 卸载）。 二、proxy_pass 的参数才是关键最简配置一行就够，但那只是开始： 123location / &#123;    proxy_pass http://172.18.1.7:8080;&#125;  1. 请求头透传（不配就是给自己挖坑）1234proxy_set_header Host $htt...</div></div></div></a><a class="pagination-related" href="/2023/11/22/Nginx%E9%AB%98%E5%8F%AF%E7%94%A8%E4%B8%8EHTTPS%E8%90%BD%E5%9C%B0/" title="Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战</div></div><div class="info-2"><div class="info-item-1">Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战大促前做架构巡检时发现一个致命问题：整条链路里 Nginx 入口只有一台，它一挂全站就没了。同时安全合规也要求全站上 HTTPS。两件事凑一起做了一次改造：双机主备入口 + 证书统一下放到入口层。这篇记录配置过程和几个只有实际部署才会遇到的坑。 一、Keepalived 怎么实现高可用Keepalived 基于 VRRP 协议做主备切换，核心是一台”虚拟路由器”：  两台机器（master&#x2F;backup）组成一个组，对外暴露一个虚拟 IP（VIP）； 域名解析指向 VIP； master 每秒发心跳，backup 收不到心跳就认为自己该接管，把 VIP 抢过来； 用户侧无感知——地址没变，只是背后换了台机器。  用户不用改任何配置，因为 VIP 和它的虚拟 MAC 在 ARP 缓存里是稳定的，这一点比”手动把 DNS 切到备机”可靠得多。 二、主备配置1yum install -y keepalived    # 两台都装  master（lb01）： 1cat /etc/keepa...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2023/09/20/Tomcat%E9%9B%86%E7%BE%A4%E5%AE%9E%E6%88%98Nginx%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E4%B8%8ERedis%E4%BC%9A%E8%AF%9D%E5%85%B1%E4%BA%AB/" title="Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2023-09-20</div><div class="info-item-2">Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查</div></div><div class="info-2"><div class="info-item-1">Tomcat 集群实战：Nginx 负载均衡、Redis 会话共享与故障排查单台 Tomcat 上线第一周就暴露了问题：一次发版重启，业务断了十几分钟；访问量一上来，CPU 直接顶到 100%。趁着业务还在爬坡期，把架构从单节点扩成了两节点集群——过程里踩的坑，比配置本身值得记录得多。 一、从单机到两节点目标拓扑很常规： 123用户 → Nginx(lb01) → upstream → web01 / web02 (Tomcat)                          └──→ NFS 共享静态资源                          └──→ Redis 会话存储  新节点的部署不是重装一遍，而是从老节点复制（前提是上一步的目录规范做得好）： 1234567# web01 上把程序目录和 systemd 配置推到 web02scp -rp /soft 172.18.1.8:/scp /usr/lib/systemd/system/tomcat.service 172.18.1.8:/usr/lib/systemd/system/# web02 上建立软...</div></div></div></a><a class="pagination-related" href="/2023/10/25/Nginx%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E4%B8%8E%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E5%AE%9E%E6%88%98/" title="Nginx 反向代理与负载均衡实战：upstream、真实 IP 与四层七层选型"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2023-10-25</div><div class="info-item-2">Nginx 反向代理与负载均衡实战：upstream、真实 IP 与四层七层选型</div></div><div class="info-2"><div class="info-item-1">Nginx 反向代理与负载均衡实战：upstream、真实 IP 与四层七层选型把后端从一台扩到多台只是加两个 IP 的事，真正麻烦的是加完之后冒出来的一堆问题：后端日志里全是负载均衡的 IP、出了 502 不知道该看哪张日志、两个后端”用户登录状态随机丢失”。这篇把反向代理和负载均衡这一层该配的东西整理一遍。 一、正代理和反代理，一句话分清区别在服务的对象：正向代理代理客户端（客户端主动配置代理，代表是翻墙工具和企业上网代理），反向代理代理服务端（客户端以为在直连，实际请求被 Nginx 转发给后端）。运维日常干的都是后者。 对后端的价值就三条：统一入口（后端扩缩容用户无感知）、分摊压力（多节点负载）、安全缓冲（后端不直接暴露公网，可在入口层做限流、WAF、HTTPS 卸载）。 二、proxy_pass 的参数才是关键最简配置一行就够，但那只是开始： 123location / &#123;    proxy_pass http://172.18.1.7:8080;&#125;  1. 请求头透传（不配就是给自己挖坑）1234proxy_set_header Host $htt...</div></div></div></a><a class="pagination-related" href="/2023/10/11/Nginx%E9%85%8D%E7%BD%AE%E4%B8%8E%E6%97%A5%E5%BF%97%E5%AE%9E%E6%88%98/" title="Nginx 配置与日志实战：从配置文件结构到 rewrite 规则"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2023-10-11</div><div class="info-item-2">Nginx 配置与日志实战：从配置文件结构到 rewrite 规则</div></div><div class="info-2"><div class="info-item-1">Nginx 配置与日志实战：从配置文件结构到 rewrite 规则接手公司几台 Web 服务器时，我看到的第一样东西是：nginx.conf 被改过几十版，十几个站点全堆在一个文件里，日志统一写在一个 access.log。改一次配置要在一千多行里翻半天——那次改造是从”把配置理清楚”开始的。 一、安装：直接用官方源CentOS 默认源里的 Nginx 版本偏旧，配置写法也落后。用官方仓库装： 1cat /etc/yum.repos.d/nginx.repo  123456[nginx-stable]name=nginx stable repobaseurl=http://nginx.org/packages/centos/$releasever/$basearch/gpgcheck=1enabled=1gpgkey=https://nginx.org/keys/nginx_signing.key  123yum -y install nginxnginx -v       # nginx/1.24.0systemctl start nginx &amp;&amp; system...</div></div></div></a><a class="pagination-related" href="/2023/11/22/Nginx%E9%AB%98%E5%8F%AF%E7%94%A8%E4%B8%8EHTTPS%E8%90%BD%E5%9C%B0/" title="Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2023-11-22</div><div class="info-item-2">Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战</div></div><div class="info-2"><div class="info-item-1">Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战大促前做架构巡检时发现一个致命问题：整条链路里 Nginx 入口只有一台，它一挂全站就没了。同时安全合规也要求全站上 HTTPS。两件事凑一起做了一次改造：双机主备入口 + 证书统一下放到入口层。这篇记录配置过程和几个只有实际部署才会遇到的坑。 一、Keepalived 怎么实现高可用Keepalived 基于 VRRP 协议做主备切换，核心是一台”虚拟路由器”：  两台机器（master&#x2F;backup）组成一个组，对外暴露一个虚拟 IP（VIP）； 域名解析指向 VIP； master 每秒发心跳，backup 收不到心跳就认为自己该接管，把 VIP 抢过来； 用户侧无感知——地址没变，只是背后换了台机器。  用户不用改任何配置，因为 VIP 和它的虚拟 MAC 在 ARP 缓存里是稳定的，这一点比”手动把 DNS 切到备机”可靠得多。 二、主备配置1yum install -y keepalived    # 两台都装  master（lb01）： 1cat /etc/keepa...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#LNMP-%E6%9E%B6%E6%9E%84%E5%AE%9E%E6%88%98%EF%BC%9A%E4%BB%8E%E5%8D%95%E6%9C%BA%E6%90%AD%E5%BB%BA%E5%88%B0%E6%95%B0%E6%8D%AE%E5%BA%93%E5%88%86%E7%A6%BB%E4%B8%8E%E5%8A%A8%E9%9D%99%E5%88%86%E7%A6%BB"><span class="toc-number">1.</span> <span class="toc-text">LNMP 架构实战：从单机搭建到数据库分离与动静分离</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E5%85%88%E7%90%86%E6%B8%85-LNMP-%E6%80%8E%E4%B9%88%E8%B7%91"><span class="toc-number">1.1.</span> <span class="toc-text">一、先理清 LNMP 怎么跑</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E5%8D%95%E6%9C%BA%E6%90%AD%E5%BB%BA"><span class="toc-number">1.2.</span> <span class="toc-text">二、单机搭建</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-Nginx-%E4%B8%8E%E7%BB%9F%E4%B8%80%E7%94%A8%E6%88%B7"><span class="toc-number">1.2.1.</span> <span class="toc-text">1. Nginx 与统一用户</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-PHP-FPM"><span class="toc-number">1.2.2.</span> <span class="toc-text">2. PHP-FPM</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-MySQL%EF%BC%88MariaDB%EF%BC%89"><span class="toc-number">1.2.3.</span> <span class="toc-text">3. MySQL（MariaDB）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-Nginx-%E4%BE%A7%E6%8E%A5%E5%85%A5-FastCGI"><span class="toc-number">1.2.4.</span> <span class="toc-text">4. Nginx 侧接入 FastCGI</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E6%95%B0%E6%8D%AE%E5%BA%93%E5%88%86%E7%A6%BB%EF%BC%9A%E6%8A%8A-OOM-%E7%9A%84%E6%A0%B9%E5%9B%A0%E6%8B%86%E6%8E%89"><span class="toc-number">1.3.</span> <span class="toc-text">三、数据库分离：把 OOM 的根因拆掉</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81Web-%E6%89%A9%E5%88%B0%E5%A4%9A%E8%8A%82%E7%82%B9"><span class="toc-number">1.4.</span> <span class="toc-text">四、Web 扩到多节点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E4%B8%8A%E4%BC%A0%E7%9B%AE%E5%BD%95%E6%8C%82-NFS%EF%BC%9A%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E7%9A%84%E4%B8%80%E8%87%B4%E6%80%A7"><span class="toc-number">1.5.</span> <span class="toc-text">五、上传目录挂 NFS：静态资源的一致性</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E5%8A%A8%E9%9D%99%E5%88%86%E7%A6%BB%EF%BC%9A%E4%B8%89%E7%A7%8D%E8%90%BD%E5%9C%B0%E6%96%B9%E5%BC%8F"><span class="toc-number">1.6.</span> <span class="toc-text">六、动静分离：三种落地方式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%B9%E5%BC%8F%E4%B8%80%EF%BC%9A%E5%8D%95%E6%9C%BA%E5%81%9A%EF%BC%88%E6%9C%80%E7%AE%80%E5%8D%95%E7%9A%84%E8%B5%B7%E6%AD%A5%EF%BC%89"><span class="toc-number">1.6.1.</span> <span class="toc-text">方式一：单机做（最简单的起步）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%B9%E5%BC%8F%E4%BA%8C%EF%BC%9A%E9%9D%99%E6%80%81%E4%B8%80%E5%8F%B0%E3%80%81%E5%8A%A8%E6%80%81%E4%B8%80%E5%8F%B0"><span class="toc-number">1.6.2.</span> <span class="toc-text">方式二：静态一台、动态一台</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%B9%E5%BC%8F%E4%B8%89%EF%BC%9A%E5%9C%A8%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E4%B8%8A%E7%BB%9F%E4%B8%80%E8%B0%83%E5%BA%A6"><span class="toc-number">1.6.3.</span> <span class="toc-text">方式三：在负载均衡上统一调度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%99%84%EF%BC%9A%E6%8C%89%E5%AE%A2%E6%88%B7%E7%AB%AF%E7%B1%BB%E5%9E%8B%E5%88%86%E6%B5%81"><span class="toc-number">1.6.4.</span> <span class="toc-text">附：按客户端类型分流</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E8%BF%99%E5%A5%97%E6%9E%B6%E6%9E%84%E7%9A%84%E5%A4%8D%E7%9B%98"><span class="toc-number">1.7.</span> <span class="toc-text">七、这套架构的复盘</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2025/08/28/%E5%BD%93AI%E8%B5%B0%E8%BF%9B%E8%BF%90%E7%BB%B4%E8%BF%99%E5%8D%8A%E5%B9%B4%E7%9A%84%E8%A7%82%E5%AF%9F%E4%B8%8E%E6%80%9D%E8%80%83/" title="当 AI 走进运维：这半年的观察与思考">当 AI 走进运维：这半年的观察与思考</a><time datetime="2025-08-28T02:00:00.000Z" title="发表于 2025-08-28 10:00:00">2025-08-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/08/27/AnsibleRoles%E4%B8%8EJinja2%E9%83%A8%E7%BD%B2%E5%89%A7%E6%9C%AC%E5%B7%A5%E7%A8%8B%E5%8C%96/" title="Ansible Roles 与 Jinja2：部署剧本工程化实战">Ansible Roles 与 Jinja2：部署剧本工程化实战</a><time datetime="2024-08-27T02:00:00.000Z" title="发表于 2024-08-27 10:00:00">2024-08-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/08/04/Ansible%E6%B5%81%E7%A8%8B%E6%8E%A7%E5%88%B6%E5%AE%9E%E6%88%98when%E5%BE%AA%E7%8E%AFhandlers%E4%B8%8E%E6%A0%87%E7%AD%BE/" title="Ansible 流程控制实战：when、循环、handlers 与标签">Ansible 流程控制实战：when、循环、handlers 与标签</a><time datetime="2024-08-04T02:00:00.000Z" title="发表于 2024-08-04 10:00:00">2024-08-04</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/07/16/AnsiblePlaybook%E4%B8%8E%E5%8F%98%E9%87%8F%E4%BD%93%E7%B3%BB%E5%AE%9E%E6%88%98/" title="Ansible Playbook 与变量体系实战">Ansible Playbook 与变量体系实战</a><time datetime="2024-07-16T02:00:00.000Z" title="发表于 2024-07-16 10:00:00">2024-07-16</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/06/23/Ansible%E5%B8%B8%E7%94%A8%E6%A8%A1%E5%9D%97%E5%AE%9E%E6%88%98%E4%BB%8E%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%88%B0%E6%95%B0%E6%8D%AE%E5%BA%93/" title="Ansible 常用模块实战：从软件包到数据库">Ansible 常用模块实战：从软件包到数据库</a><time datetime="2024-06-23T02:00:00.000Z" title="发表于 2024-06-23 10:00:00">2024-06-23</time></div></div></div></div></div></div></main><footer id="footer" style="background: transparent;"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2023 - 2026 By LuminDream</span></div><div class="footer_custom_text"><div class="site-runtime">此间小站 · 已相伴 <span id="site-runtime">点亮中</span></div></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.6.2"></script><script src="/js/main.js?v=5.6.2"></script><script src="/js/tw_cn.js?v=5.6.2"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.14/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page@5.2.0/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"></div><script>(function(){var s=new Date("2023-03-01T00:00:00+08:00");function p(n){return n<10?"0"+n:n}function tick(){var total=Math.floor((Date.now()-s)/1000),el=document.getElementById("site-runtime");if(el){el.textContent=Math.floor(total/86400)+" 天 "+p(Math.floor(total%86400/3600))+" 时 "+p(Math.floor(total%3600/60))+" 分 "+p(total%60)+" 秒"}}tick();setInterval(tick,1000)})();</script><canvas class="fireworks" mobile="false"></canvas><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/fireworks.min.js"></script><script defer="defer" id="fluttering_ribbon" mobile="true" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章..." type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.6.2"></script></div></div></body></html>

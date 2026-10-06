@@ -1,0 +1,355 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>SSH 免密登录与安全加固实战：从密钥原理到排障 | LuminDream's Blogs</title><meta name="author" content="LuminDream"><meta name="copyright" content="LuminDream"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="服务器被批量爆破之后做的 SSH 加固：密钥认证替代密码、免密失败的排查路径、sshd 加固项逐条说明、连接复用与跳板直连技巧，以及一张常见故障对照表。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SSH 免密登录与安全加固实战：从密钥原理到排障">
+<meta property="og:url" content="https://www.lumindream.site/2023/12/06/SSH%E5%85%8D%E5%AF%86%E7%99%BB%E5%BD%95%E4%B8%8E%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA%E5%AE%9E%E6%88%98/">
+<meta property="og:site_name" content="LuminDream&#39;s Blogs">
+<meta property="og:description" content="服务器被批量爆破之后做的 SSH 加固：密钥认证替代密码、免密失败的排查路径、sshd 加固项逐条说明、连接复用与跳板直连技巧，以及一张常见故障对照表。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://www.lumindream.site/images/pic_touxiang.png">
+<meta property="article:published_time" content="2023-12-06T02:00:00.000Z">
+<meta property="article:modified_time" content="2023-12-06T02:00:00.000Z">
+<meta property="article:author" content="LuminDream">
+<meta property="article:tag" content="SSH">
+<meta property="article:tag" content="安全加固">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://www.lumindream.site/images/pic_touxiang.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "SSH 免密登录与安全加固实战：从密钥原理到排障",
+  "url": "https://www.lumindream.site/2023/12/06/SSH%E5%85%8D%E5%AF%86%E7%99%BB%E5%BD%95%E4%B8%8E%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA%E5%AE%9E%E6%88%98/",
+  "image": "https://www.lumindream.site/images/pic_touxiang.png",
+  "datePublished": "2023-12-06T02:00:00.000Z",
+  "dateModified": "2023-12-06T02:00:00.000Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "LuminDream",
+      "url": "https://www.lumindream.site"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/images/pic_blogweb.png"><link rel="canonical" href="https://www.lumindream.site/2023/12/06/SSH%E5%85%8D%E5%AF%86%E7%99%BB%E5%BD%95%E4%B8%8E%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA%E5%AE%9E%E6%88%98/"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><meta name="google-site-verification" content="google6fbb5e4d2b11068f"/><meta name="baidu-site-verification" content="codeva-Wf0ZuoEmLd"/><link rel="stylesheet" href="/css/index.css?v=5.6.2"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.14/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d1f17')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          const mediaQueryDark = window.matchMedia('(prefers-color-scheme: dark)')
+          const mediaQueryLight = window.matchMedia('(prefers-color-scheme: light)')
+
+          if (theme === undefined) {
+            if (mediaQueryLight.matches) activateLightMode()
+            else if (mediaQueryDark.matches) activateDarkMode()
+            else {
+              const hour = new Date().getHours()
+              const start = 6
+              const end = 18
+              const isNight =
+                start < end
+                    ? hour < start || hour >= end
+                    : hour >= start || hour < end
+              isNight ? activateDarkMode() : activateLightMode()
+            }
+            mediaQueryDark.addEventListener('change', e => {
+              if (saveToLocal.get('theme') === undefined) {
+                e.matches ? activateDarkMode() : activateLightMode()
+              }
+            })
+          } else {
+            theme === 'light' ? activateLightMode() : activateDarkMode()
+          }
+        
+      
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":true,"top_n_per_article":-1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: true,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: true
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'SSH 免密登录与安全加固实战：从密钥原理到排障',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/about-custom.css"><link rel="stylesheet" href="/css/theme-skin.css?v=5"><meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/atom.xml" title="LuminDream's Blogs" type="application/atom+xml">
+</head><body><div class="bg-animation" id="web_bg"></div><script>(() => {
+  const arr = ["background-image: url(/images/pic_bg1.png);","background-image: url(/images/pic_bg2.png);","background-image: url(/images/pic_bg3.png);"]
+  const webBgDiv = document.getElementById('web_bg')
+
+  const setRandomBg = () => {
+    webBgDiv.style = arr[Math.floor(Math.random() * arr.length)]
+    requestAnimationFrame(() => webBgDiv.classList.add('bg-animation'))
+  }
+
+  document.addEventListener('pjax:send', () => {
+    webBgDiv.style = ''
+    webBgDiv.classList.remove('bg-animation')
+  })
+
+  document.addEventListener('pjax:complete', setRandomBg)
+  document.addEventListener('DOMContentLoaded', setRandomBg)
+})()
+</script><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/images/pic_touxiang.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/ loading='lazy'></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">39</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">49</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">4</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group hide"><i class="fa-fw fas fa-book"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/projects/"><i class="fa-fw fas fa-code"></i><span> 项目</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-heart"></i><span> 生活</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/essay/"><i class="fa-fw fas fa-pen-fancy"></i><span> 随笔</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="not-top-img fixed" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><img class="site-icon" src="/images/pic_blogweb.png" alt="Logo" loading='lazy'><span class="site-name">LuminDream's Blogs</span></a><a class="nav-page-title" href="/"><span class="site-name">SSH 免密登录与安全加固实战：从密钥原理到排障</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group hide"><i class="fa-fw fas fa-book"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/projects/"><i class="fa-fw fas fa-code"></i><span> 项目</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-heart"></i><span> 生活</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/essay/"><i class="fa-fw fas fa-pen-fancy"></i><span> 随笔</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav></header><main class="layout" id="content-inner"><div id="post"><div id="post-info"><h1 class="post-title">SSH 免密登录与安全加固实战：从密钥原理到排障</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="fa-fw post-meta-icon far fa-calendar-alt"></i><span class="post-meta-label">发表于</span><time datetime="2023-12-06T02:00:00.000Z" title="发表于 2023-12-06 10:00:00">2023-12-06</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E7%BD%91%E7%BB%9C%E4%B8%8E%E5%AE%89%E5%85%A8/">网络与安全</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">1.7k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>6分钟</span></span></div></div></div><article class="container post-content" id="article-container"><h1 id="SSH-免密登录与安全加固实战：从密钥原理到排障"><a href="#SSH-免密登录与安全加固实战：从密钥原理到排障" class="headerlink" title="SSH 免密登录与安全加固实战：从密钥原理到排障"></a>SSH 免密登录与安全加固实战：从密钥原理到排障</h1><p>一次例行的安全扫描结果里，我管理的服务器 22 端口一周被尝试登录几十万次——虽然都没有成功，但一直在”裸奔”也知道迟早出事。那周做了一次全量加固：密钥认证替代密码、sshd 参数收紧、加上 fail2ban。这篇把过程和踩过的坑记录下来。</p>
+<h2 id="一、SSH-登录到底是怎么完成的"><a href="#一、SSH-登录到底是怎么完成的" class="headerlink" title="一、SSH 登录到底是怎么完成的"></a>一、SSH 登录到底是怎么完成的</h2><p>SSH 用”非对称加密做身份认证 + 对称加密传数据”：</p>
+<ol>
+<li>建立连接时双方协商出临时会话密钥（Diffie-Hellman），之后的数据都用对称加密（AES&#x2F;ChaCha20）传；</li>
+<li>认证阶段二选一：密码认证，或者密钥认证——<strong>客户端持有私钥，服务端存公钥，登录时用私钥对随机挑战签名</strong>；</li>
+<li>首次连接会提示指纹（host key），用来确认连的是目标机器，防中间人。</li>
+</ol>
+<p>密钥认证为什么比密码安全：私钥不出本机，服务端只存公钥，没有”密码在网络上传递”这个环节，也就不怕暴力猜解。</p>
+<h2 id="二、免密登录：三个文件两个权限"><a href="#二、免密登录：三个文件两个权限" class="headerlink" title="二、免密登录：三个文件两个权限"></a>二、免密登录：三个文件两个权限</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1) 生成密钥对（ed25519 比 rsa 更短更安全）</span></span><br><span class="line">ssh-keygen -t ed25519 -C <span class="string">&quot;ops@ops-master&quot;</span> -N <span class="string">&quot;&quot;</span> -f ~/.ssh/id_ed25519</span><br><span class="line"><span class="comment">#   id_ed25519       私钥：绝不出本机，权限 600</span></span><br><span class="line"><span class="comment">#   id_ed25519.pub   公钥：分发到所有目标服务器</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 2) 分发公钥</span></span><br><span class="line">ssh-copy-id -i ~/.ssh/id_ed25519.pub 172.18.1.7</span><br><span class="line"></span><br><span class="line"><span class="comment"># 手动方式（图形客户端或没装 ssh-copy-id 时）</span></span><br><span class="line"><span class="built_in">mkdir</span> -p ~/.ssh &amp;&amp; <span class="built_in">chmod</span> 700 ~/.ssh</span><br><span class="line">vim ~/.ssh/authorized_keys        <span class="comment"># 粘贴公钥</span></span><br><span class="line"><span class="built_in">chmod</span> 600 ~/.ssh/authorized_keys</span><br><span class="line"></span><br><span class="line"><span class="comment"># 3) 验证</span></span><br><span class="line">ssh 172.18.1.7 <span class="string">&#x27;hostname&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="权限：免密失败的-90-原因"><a href="#权限：免密失败的-90-原因" class="headerlink" title="权限：免密失败的 90% 原因"></a>权限：免密失败的 90% 原因</h3><p>sshd 开了严格模式后，对”家目录 → .ssh → authorized_keys”整条链路的权限非常敏感：</p>
+<table>
+<thead>
+<tr>
+<th>对象</th>
+<th>要求</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>~/.ssh/</code></td>
+<td>700</td>
+<td>其他人不可进入</td>
+</tr>
+<tr>
+<td><code>~/.ssh/authorized_keys</code></td>
+<td>600</td>
+<td>只有属主能读写</td>
+</tr>
+<tr>
+<td>家目录 <code>~</code></td>
+<td>组&#x2F;其他用户不可写</td>
+<td>750 或 700 都行，禁止 775&#x2F;777</td>
+</tr>
+<tr>
+<td>私钥</td>
+<td>600</td>
+<td>被读出等于裸奔</td>
+</tr>
+</tbody></table>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 逐层检查修复（千万别对 /root 用 -R 递归，会把系统文件权限改坏）</span></span><br><span class="line"><span class="built_in">ls</span> -ld /root /root/.ssh</span><br><span class="line"><span class="built_in">chmod</span> 700 /root/.ssh</span><br><span class="line"><span class="built_in">chmod</span> 600 /root/.ssh/authorized_keys</span><br><span class="line"><span class="built_in">chown</span> root:root /root /root/.ssh /root/.ssh/authorized_keys</span><br></pre></td></tr></table></figure>
+
+<p>顺带纠正一个流传很广的”加固建议”：把家目录改成 550&#x2F;555。这是过度加固——官方只要求”组&#x2F;其他用户不可写”，改成 550 连 root 自己都建不了文件，是纯粹的自找麻烦。</p>
+<h2 id="三、免密失败排查：别瞎试，按顺序来"><a href="#三、免密失败排查：别瞎试，按顺序来" class="headerlink" title="三、免密失败排查：别瞎试，按顺序来"></a>三、免密失败排查：别瞎试，按顺序来</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1) 确认服务端开着密钥认证</span></span><br><span class="line">grep -i <span class="string">&quot;pubkeyauthentication&quot;</span> /etc/ssh/sshd_config</span><br><span class="line"></span><br><span class="line"><span class="comment"># 2) 客户端 -vvv 看握手全过程（最有效的一步）</span></span><br><span class="line">ssh -vvv 172.18.1.7</span><br><span class="line"><span class="comment">#    Offering public key: ...              提交了哪把公钥</span></span><br><span class="line"><span class="comment">#    Authentications that can continue: password   服务端拒绝了密钥</span></span><br><span class="line"><span class="comment">#    Server accepts key                    认证通过</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 3) 服务端日志（免密失败时的关键证据）</span></span><br><span class="line"><span class="built_in">tail</span> -50 /var/log/secure           <span class="comment"># RHEL/CentOS</span></span><br><span class="line">journalctl -u sshd -n 50           <span class="comment"># systemd 系统</span></span><br><span class="line"><span class="comment">#    Authentication refused: bad ownership or modes ...   → 权限问题</span></span><br><span class="line"><span class="comment">#    No supported authentication methods available        → 没配密钥/客户端没带对私钥</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 4) 网络层</span></span><br><span class="line">nc -vz 172.18.1.7 22</span><br></pre></td></tr></table></figure>
+
+<p>按”权限 → 配置 → 日志 → 网络”的顺序走，四步之内基本都能定位，比反复重试 <code>ssh-copy-id</code> 高效得多。</p>
+<h2 id="四、sshd-加固：逐条说明"><a href="#四、sshd-加固：逐条说明" class="headerlink" title="四、sshd 加固：逐条说明"></a>四、sshd 加固：逐条说明</h2><p>服务器只要开着 22 端口，被扫描是持续的。加固项一次配齐：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vim /etc/ssh/sshd_config</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Port 1022                       # 1) 改默认端口，避开批量扫描（防火墙要放行新端口）</span><br><span class="line">PermitRootLogin no              # 2) 禁止 root 直连，强制走普通用户+sudo</span><br><span class="line">PasswordAuthentication no       # 3) 关密码认证，只允许密钥</span><br><span class="line">PubkeyAuthentication yes</span><br><span class="line">MaxAuthTries 3                  # 4) 最多试 3 次，防爆破</span><br><span class="line">MaxSessions 10                  # 5) 单连接会话上限</span><br><span class="line">AllowUsers ops01 ops02          # 6) 只允许白名单用户登录</span><br><span class="line">ClientAliveInterval 300         # 7) 300 秒无活动发心跳</span><br><span class="line">ClientAliveCountMax 2           # 8) 连续 2 次无响应踢下线，防僵尸会话</span><br><span class="line">LoginGraceTime 30               # 9) 30 秒内必须完成认证</span><br><span class="line">UseDNS no                       # 10) 不反查 DNS，登录不再转圈十几秒</span><br><span class="line">GSSAPIAuthentication no         # 11) 关 GSSAPI，同样为提速</span><br></pre></td></tr></table></figure>
+
+<p>改完先校验再平滑重载——<strong>千万不要直接 restart，断线就可能把自己锁在外面</strong>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sshd -t &amp;&amp; systemctl reload sshd</span><br><span class="line">systemctl status sshd</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>加固翻车自救：真把自己锁了，用云控制台 VNC 进去改回来。规避办法是改 sshd 前先开一个 tmux&#x2F;screen 会话保活，这样即使新连接失败，旧会话还在。</p>
+</blockquote>
+<p>另外建议顺手起一个 fail2ban：<code>PasswordAuthentication no</code> 之后爆破实际打不进来，但 fail2ban 能把持续扫描的 IP 直接封掉，日志和告警都清净很多。</p>
+<h2 id="五、日常连接技巧"><a href="#五、日常连接技巧" class="headerlink" title="五、日常连接技巧"></a>五、日常连接技巧</h2><p>环境稳定之后，用 <code>~/.ssh/config</code> 把常用连接固化成别名：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">Host web01</span><br><span class="line">    HostName 172.18.1.7</span><br><span class="line">    User ops</span><br><span class="line">    Port 1022</span><br><span class="line"></span><br><span class="line"># 连接复用：第一次认证后，后续连接走同一隧道（跳板场景提速明显）</span><br><span class="line">Host 10.0.8.*</span><br><span class="line">    ControlMaster auto</span><br><span class="line">    ControlPath ~/.ssh/cm-%r@%h:%p</span><br><span class="line">    ControlPersist 4h</span><br><span class="line"></span><br><span class="line"># 跳板直连：一条命令穿透跳板到内网机器</span><br><span class="line">Host 172.18.1.7</span><br><span class="line">    ProxyJump ops@10.0.8.31</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">ssh web01                                   <span class="comment"># 少打一半字</span></span><br><span class="line">ssh -J ops@10.0.8.31 root@172.18.1.7        <span class="comment"># 不走配置文件时的跳板直连</span></span><br><span class="line"><span class="built_in">eval</span> <span class="string">&quot;<span class="subst">$(ssh-agent -s)</span>&quot;</span> &amp;&amp; ssh-add ~/.ssh/id_ed25519   <span class="comment"># 私钥有口令时只用输一次</span></span><br><span class="line">scp app.tar.gz web01:/data/app/             <span class="comment"># 传单个文件</span></span><br><span class="line">rsync -avz --progress /data/app/ web01:/data/app/     <span class="comment"># 增量同步用 rsync</span></span><br></pre></td></tr></table></figure>
+
+<p>多台机器批量执行命令时用循环顶一下可以，真到几十台就该上 Ansible：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> ip <span class="keyword">in</span> 10.0.8.&#123;7..10&#125;; <span class="keyword">do</span> ssh <span class="variable">$ip</span> <span class="string">&#x27;uptime&#x27;</span>; <span class="keyword">done</span></span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>注意：<code>for</code> + <code>ssh</code> 这种写法没有并发控制，机器一多就会把本机的连接数打满，正式批量操作还是交给 Ansible。</p>
+</blockquote>
+<h2 id="六、常见故障对照"><a href="#六、常见故障对照" class="headerlink" title="六、常见故障对照"></a>六、常见故障对照</h2><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>原因</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Permission denied (publickey,password)</td>
+<td>密钥&#x2F;权限&#x2F;配置之一有问题</td>
+<td>按”四步排查”走一遍</td>
+</tr>
+<tr>
+<td>Host key verification failed</td>
+<td>目标机重装&#x2F;换密钥，指纹变了</td>
+<td>确认后删除 known_hosts 中对应条目重连</td>
+</tr>
+<tr>
+<td>Too many authentication failures</td>
+<td>客户端一次带出太多私钥，超过 MaxAuthTries</td>
+<td><code>ssh -o IdentitiesOnly=yes -i 指定私钥</code></td>
+</tr>
+<tr>
+<td>Connection refused</td>
+<td>端口没开&#x2F;服务没起&#x2F;防火墙</td>
+<td><code>nc -vz</code> 测端口，查 sshd 状态</td>
+</tr>
+<tr>
+<td>登录很慢（十几秒）</td>
+<td>DNS 反查 &#x2F; GSSAPI</td>
+<td>两端都关 UseDNS、GSSAPIAuthentication</td>
+</tr>
+<tr>
+<td>Connection reset by peer</td>
+<td>被 fail2ban&#x2F;安全组拦截</td>
+<td>查 fail2ban 日志、云控制台安全组</td>
+</tr>
+<tr>
+<td>登录后频繁断线</td>
+<td>心跳配置太激进&#x2F;链路抖动</td>
+<td>调大 ClientAliveInterval</td>
+</tr>
+</tbody></table>
+<h2 id="七、小结"><a href="#七、小结" class="headerlink" title="七、小结"></a>七、小结</h2><p>SSH 加固做完之后有两个立竿见影的效果：爆破日志量直接归零，日常登录速度也快了一截（关掉 DNS 反查的功劳）。几条经验总结：密钥体系要尽早建立，别等被扫了才动手；改 sshd 配置永远”先保活会话再动刀”；免密问题先看权限再看日志，九成问题在权限上。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://www.lumindream.site">LuminDream</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://www.lumindream.site/2023/12/06/SSH%E5%85%8D%E5%AF%86%E7%99%BB%E5%BD%95%E4%B8%8E%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA%E5%AE%9E%E6%88%98/">https://www.lumindream.site/2023/12/06/SSH%E5%85%8D%E5%AF%86%E7%99%BB%E5%BD%95%E4%B8%8E%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA%E5%AE%9E%E6%88%98/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://www.lumindream.site" target="_blank">LuminDream's Blogs</a>！</span></div></div><div class="tag_share"></div><div class="post-reward"><div class="reward-button"><i class="fas fa-qrcode"></i>赞助</div><div class="reward-main"><ul class="reward-all"><li class="reward-item"><a href="/images/wx.png" target="_blank"><img class="post-qr-code-img" src="/images/wx.png" alt="微信"/ loading='lazy'></a><div class="post-qr-code-desc">微信</div></li><li class="reward-item"><a href="/images/zfb.jpg" target="_blank"><img class="post-qr-code-img" src="/images/zfb.jpg" alt="支付宝"/ loading='lazy'></a><div class="post-qr-code-desc">支付宝</div></li></ul></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2023/11/22/Nginx%E9%AB%98%E5%8F%AF%E7%94%A8%E4%B8%8EHTTPS%E8%90%BD%E5%9C%B0/" title="Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战</div></div><div class="info-2"><div class="info-item-1">Nginx 高可用与 HTTPS 落地：Keepalived 双机主备 + 证书改造实战大促前做架构巡检时发现一个致命问题：整条链路里 Nginx 入口只有一台，它一挂全站就没了。同时安全合规也要求全站上 HTTPS。两件事凑一起做了一次改造：双机主备入口 + 证书统一下放到入口层。这篇记录配置过程和几个只有实际部署才会遇到的坑。 一、Keepalived 怎么实现高可用Keepalived 基于 VRRP 协议做主备切换，核心是一台”虚拟路由器”：  两台机器（master&#x2F;backup）组成一个组，对外暴露一个虚拟 IP（VIP）； 域名解析指向 VIP； master 每秒发心跳，backup 收不到心跳就认为自己该接管，把 VIP 抢过来； 用户侧无感知——地址没变，只是背后换了台机器。  用户不用改任何配置，因为 VIP 和它的虚拟 MAC 在 ARP 缓存里是稳定的，这一点比”手动把 DNS 切到备机”可靠得多。 二、主备配置1yum install -y keepalived    # 两台都装  master（lb01）： 1cat /etc/keepa...</div></div></div></a><a class="pagination-related" href="/2023/12/20/JumpServer%E5%A0%A1%E5%9E%92%E6%9C%BA%E8%90%BD%E5%9C%B0%E5%AE%9E%E6%88%98/" title="JumpServer 堡垒机落地实战：三类用户模型与 sudo 白名单"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">JumpServer 堡垒机落地实战：三类用户模型与 sudo 白名单</div></div><div class="info-2"><div class="info-item-1">JumpServer 堡垒机落地实战：三类用户模型与 sudo 白名单SSH 加固之后权限问题暴露得更明显了：业务机器上人手一个账号、root 随处可用、发出去的密码收不回来、出了事谁也说不清”那条命令是谁敲的”。数量到十几台之后，靠约定已经管不住了，上一套堡垒机是唯一的出路。这篇记录 JumpServer 的落地过程。 一、为什么必须要有统一入口直连模式下有四个治不了的病：  账号泛滥：每个人一个 root 或业务账号，密码到处传，离职了账号还在； 权限不可控：开发能登生产、能改配置，没人知道； 没有审计：出事只能查命令历史，多用户共享账号时基本没法定位； 暴露面大：业务服务器直接开 22 端口对公网，每天被扫。  堡垒机的定位就是：唯一入口 + 统一认证 + 权限隔离 + 操作审计。所有运维操作要么走 Web 终端，要么 SSH 先连堡垒机再选资产，业务机不再对个人开放。 跳板机和堡垒机的区别也顺带说清：跳板机只是”一台中转服务器”；堡垒机是一整套平台，多了统一账号体系、资产授权、命令过滤、录像回放这些能力。 二、部署与组件构成JumpServer 的组件比想象中多，但安装脚...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2023/12/20/JumpServer%E5%A0%A1%E5%9E%92%E6%9C%BA%E8%90%BD%E5%9C%B0%E5%AE%9E%E6%88%98/" title="JumpServer 堡垒机落地实战：三类用户模型与 sudo 白名单"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2023-12-20</div><div class="info-item-2">JumpServer 堡垒机落地实战：三类用户模型与 sudo 白名单</div></div><div class="info-2"><div class="info-item-1">JumpServer 堡垒机落地实战：三类用户模型与 sudo 白名单SSH 加固之后权限问题暴露得更明显了：业务机器上人手一个账号、root 随处可用、发出去的密码收不回来、出了事谁也说不清”那条命令是谁敲的”。数量到十几台之后，靠约定已经管不住了，上一套堡垒机是唯一的出路。这篇记录 JumpServer 的落地过程。 一、为什么必须要有统一入口直连模式下有四个治不了的病：  账号泛滥：每个人一个 root 或业务账号，密码到处传，离职了账号还在； 权限不可控：开发能登生产、能改配置，没人知道； 没有审计：出事只能查命令历史，多用户共享账号时基本没法定位； 暴露面大：业务服务器直接开 22 端口对公网，每天被扫。  堡垒机的定位就是：唯一入口 + 统一认证 + 权限隔离 + 操作审计。所有运维操作要么走 Web 终端，要么 SSH 先连堡垒机再选资产，业务机不再对个人开放。 跳板机和堡垒机的区别也顺带说清：跳板机只是”一台中转服务器”；堡垒机是一整套平台，多了统一账号体系、资产授权、命令过滤、录像回放这些能力。 二、部署与组件构成JumpServer 的组件比想象中多，但安装脚...</div></div></div></a><a class="pagination-related" href="/2023/06/08/%E7%BD%91%E7%BB%9C%E7%AE%A1%E7%90%86%E4%B8%8ESSH%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA%E5%AE%9E%E6%88%98/" title="网络管理与 SSH 安全加固实战"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2023-06-08</div><div class="info-item-2">网络管理与 SSH 安全加固实战</div></div><div class="info-2"><div class="info-item-1">网络管理与 SSH 安全加固实战网络是运维的”水电煤”——不通就什么都干不了，而 SSH 又是唯一的管理通道，它的安全等级直接决定服务器被不被攻破。这篇把网络基础配置和 SSH 加固基线完整过一遍。 一、网卡与 DNS 配置CentOS 7 系网卡配置在 /etc/sysconfig/network-scripts/ifcfg-eth0： 123456789TYPE=EthernetBOOTPROTO=none        # 服务器用固定 IP：none/static；笔记本才用 dhcpNAME=eth0DEVICE=eth0ONBOOT=yes            # 开机自动启用IPADDR=10.0.8.11      # 内网固定 IP（本机局域网内唯一）PREFIX=24GATEWAY=10.0.8.1DNS1=223.5.5.5        # 阿里云公共 DNS  改完必须重启网络服务生效：systemctl restart network。 DNS 排查三连： 123cat /etc/resolv.conf   # 本机 DNS 配置cat /etc/h...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#SSH-%E5%85%8D%E5%AF%86%E7%99%BB%E5%BD%95%E4%B8%8E%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA%E5%AE%9E%E6%88%98%EF%BC%9A%E4%BB%8E%E5%AF%86%E9%92%A5%E5%8E%9F%E7%90%86%E5%88%B0%E6%8E%92%E9%9A%9C"><span class="toc-number">1.</span> <span class="toc-text">SSH 免密登录与安全加固实战：从密钥原理到排障</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81SSH-%E7%99%BB%E5%BD%95%E5%88%B0%E5%BA%95%E6%98%AF%E6%80%8E%E4%B9%88%E5%AE%8C%E6%88%90%E7%9A%84"><span class="toc-number">1.1.</span> <span class="toc-text">一、SSH 登录到底是怎么完成的</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E5%85%8D%E5%AF%86%E7%99%BB%E5%BD%95%EF%BC%9A%E4%B8%89%E4%B8%AA%E6%96%87%E4%BB%B6%E4%B8%A4%E4%B8%AA%E6%9D%83%E9%99%90"><span class="toc-number">1.2.</span> <span class="toc-text">二、免密登录：三个文件两个权限</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9D%83%E9%99%90%EF%BC%9A%E5%85%8D%E5%AF%86%E5%A4%B1%E8%B4%A5%E7%9A%84-90-%E5%8E%9F%E5%9B%A0"><span class="toc-number">1.2.1.</span> <span class="toc-text">权限：免密失败的 90% 原因</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E5%85%8D%E5%AF%86%E5%A4%B1%E8%B4%A5%E6%8E%92%E6%9F%A5%EF%BC%9A%E5%88%AB%E7%9E%8E%E8%AF%95%EF%BC%8C%E6%8C%89%E9%A1%BA%E5%BA%8F%E6%9D%A5"><span class="toc-number">1.3.</span> <span class="toc-text">三、免密失败排查：别瞎试，按顺序来</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81sshd-%E5%8A%A0%E5%9B%BA%EF%BC%9A%E9%80%90%E6%9D%A1%E8%AF%B4%E6%98%8E"><span class="toc-number">1.4.</span> <span class="toc-text">四、sshd 加固：逐条说明</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E6%97%A5%E5%B8%B8%E8%BF%9E%E6%8E%A5%E6%8A%80%E5%B7%A7"><span class="toc-number">1.5.</span> <span class="toc-text">五、日常连接技巧</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E5%B8%B8%E8%A7%81%E6%95%85%E9%9A%9C%E5%AF%B9%E7%85%A7"><span class="toc-number">1.6.</span> <span class="toc-text">六、常见故障对照</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E5%B0%8F%E7%BB%93"><span class="toc-number">1.7.</span> <span class="toc-text">七、小结</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2025/08/28/%E5%BD%93AI%E8%B5%B0%E8%BF%9B%E8%BF%90%E7%BB%B4%E8%BF%99%E5%8D%8A%E5%B9%B4%E7%9A%84%E8%A7%82%E5%AF%9F%E4%B8%8E%E6%80%9D%E8%80%83/" title="当 AI 走进运维：这半年的观察与思考">当 AI 走进运维：这半年的观察与思考</a><time datetime="2025-08-28T02:00:00.000Z" title="发表于 2025-08-28 10:00:00">2025-08-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/08/27/AnsibleRoles%E4%B8%8EJinja2%E9%83%A8%E7%BD%B2%E5%89%A7%E6%9C%AC%E5%B7%A5%E7%A8%8B%E5%8C%96/" title="Ansible Roles 与 Jinja2：部署剧本工程化实战">Ansible Roles 与 Jinja2：部署剧本工程化实战</a><time datetime="2024-08-27T02:00:00.000Z" title="发表于 2024-08-27 10:00:00">2024-08-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/08/04/Ansible%E6%B5%81%E7%A8%8B%E6%8E%A7%E5%88%B6%E5%AE%9E%E6%88%98when%E5%BE%AA%E7%8E%AFhandlers%E4%B8%8E%E6%A0%87%E7%AD%BE/" title="Ansible 流程控制实战：when、循环、handlers 与标签">Ansible 流程控制实战：when、循环、handlers 与标签</a><time datetime="2024-08-04T02:00:00.000Z" title="发表于 2024-08-04 10:00:00">2024-08-04</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/07/16/AnsiblePlaybook%E4%B8%8E%E5%8F%98%E9%87%8F%E4%BD%93%E7%B3%BB%E5%AE%9E%E6%88%98/" title="Ansible Playbook 与变量体系实战">Ansible Playbook 与变量体系实战</a><time datetime="2024-07-16T02:00:00.000Z" title="发表于 2024-07-16 10:00:00">2024-07-16</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/06/23/Ansible%E5%B8%B8%E7%94%A8%E6%A8%A1%E5%9D%97%E5%AE%9E%E6%88%98%E4%BB%8E%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%88%B0%E6%95%B0%E6%8D%AE%E5%BA%93/" title="Ansible 常用模块实战：从软件包到数据库">Ansible 常用模块实战：从软件包到数据库</a><time datetime="2024-06-23T02:00:00.000Z" title="发表于 2024-06-23 10:00:00">2024-06-23</time></div></div></div></div></div></div></main><footer id="footer" style="background: transparent;"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2023 - 2026 By LuminDream</span></div><div class="footer_custom_text"><div class="site-runtime">此间小站 · 已相伴 <span id="site-runtime">点亮中</span></div></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.6.2"></script><script src="/js/main.js?v=5.6.2"></script><script src="/js/tw_cn.js?v=5.6.2"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.14/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page@5.2.0/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"></div><script>(function(){var s=new Date("2023-03-01T00:00:00+08:00");function p(n){return n<10?"0"+n:n}function tick(){var total=Math.floor((Date.now()-s)/1000),el=document.getElementById("site-runtime");if(el){el.textContent=Math.floor(total/86400)+" 天 "+p(Math.floor(total%86400/3600))+" 时 "+p(Math.floor(total%3600/60))+" 分 "+p(total%60)+" 秒"}}tick();setInterval(tick,1000)})();</script><canvas class="fireworks" mobile="false"></canvas><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/fireworks.min.js"></script><script defer="defer" id="fluttering_ribbon" mobile="true" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章..." type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.6.2"></script></div></div></body></html>
